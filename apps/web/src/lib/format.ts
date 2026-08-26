@@ -30,6 +30,16 @@ export const FISH_GLYPH: Record<string, string> = {
   CBETTA: '𓆛',
   ASHARK: '🦈',
   MWHALE: '🐋',
+  NEON: '✨',
+  CLOWN: '🐠',
+  ANGEL: '👼',
+  STING: '🛸',
+  HORSE: '🐴',
+  BARRA: '⚡',
+  GLDFSH: '🥇',
+  MANTA: '🦇',
+  PIRANA: '🦷',
+  CATFSH: '🐱',
 };
 
 export function fishGlyph(symbol: string) {

@@ -12,6 +12,17 @@ const FISH_SEED = [
   { symbol: 'CBETTA', name: 'Cosmic Betta', rarity: FishRarity.RARE, price: 67, volatility: 0.16, trend: 0.025 },
   { symbol: 'ASHARK', name: 'Albino Shark', rarity: FishRarity.EPIC, price: 178, volatility: 0.13, trend: 0.015 },
   { symbol: 'MWHALE', name: 'Mega Whale', rarity: FishRarity.MYTHIC, price: 420, volatility: 0.22, trend: 0.05 },
+  // +10 listings
+  { symbol: 'NEON', name: 'Neon Tetra', rarity: FishRarity.COMMON, price: 2.4, volatility: 0.22, trend: 0.01 },
+  { symbol: 'CLOWN', name: 'Anomaly Clownfish', rarity: FishRarity.RARE, price: 14.5, volatility: 0.18, trend: 0.02 },
+  { symbol: 'ANGEL', name: 'Moon Angel', rarity: FishRarity.EPIC, price: 96, volatility: 0.14, trend: 0.015 },
+  { symbol: 'STING', name: 'Void Stingray', rarity: FishRarity.LEGENDARY, price: 248, volatility: 0.19, trend: 0.03 },
+  { symbol: 'HORSE', name: 'Pixel Seahorse', rarity: FishRarity.RARE, price: 28, volatility: 0.17, trend: 0.01 },
+  { symbol: 'BARRA', name: 'Laser Barracuda', rarity: FishRarity.EPIC, price: 112, volatility: 0.16, trend: -0.01 },
+  { symbol: 'GLDFSH', name: 'Glitch Goldfish', rarity: FishRarity.COMMON, price: 1.75, volatility: 0.25, trend: 0.005 },
+  { symbol: 'MANTA', name: 'Deep Manta', rarity: FishRarity.MYTHIC, price: 365, volatility: 0.2, trend: 0.04 },
+  { symbol: 'PIRANA', name: 'Chaos Piranha', rarity: FishRarity.EPIC, price: 74, volatility: 0.21, trend: 0.02 },
+  { symbol: 'CATFSH', name: 'Abyss Catfish', rarity: FishRarity.RARE, price: 19.2, volatility: 0.15, trend: 0.008 },
 ];
 
 async function main() {
@@ -33,8 +44,8 @@ async function main() {
         volatility: f.volatility,
         trend: f.trend,
         momentum: 0,
-        minPrice: Math.max(1, f.price * 0.1),
-        maxPrice: f.price * 10,
+        minPrice: Math.max(0.05, f.price * 0.15),
+        maxPrice: f.price * 8,
         sortOrder: i,
       },
     });

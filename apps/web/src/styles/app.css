@@ -8,9 +8,9 @@
   --text: #eaecef;
   --text-muted: #848e9c;
   --text-dim: #5e6673;
-  --yellow: #fcd535;
-  --yellow-press: #f0b90b;
-  --yellow-ink: #0b0e11;
+  --accent: #38bdf8;
+  --accent-press: #0ea5e9;
+  --accent-ink: #0b0e11;
   --up: #0ecb81;
   --up-soft: rgba(14, 203, 129, 0.12);
   --down: #f6465d;
@@ -38,7 +38,7 @@ body {
   color: var(--text);
   font-family: var(--font);
   background:
-    radial-gradient(120% 70% at 50% -20%, rgba(252, 213, 53, 0.08) 0%, transparent 50%),
+    radial-gradient(120% 70% at 50% -20%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
     radial-gradient(80% 50% at 100% 0%, rgba(14, 203, 129, 0.05) 0%, transparent 40%),
     var(--bg);
   background-attachment: fixed;
@@ -141,7 +141,7 @@ button {
 
 .brand span {
   display: block;
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .lede {
@@ -180,7 +180,7 @@ button {
   background: conic-gradient(
     from 210deg,
     transparent 0deg,
-    rgba(252, 213, 53, 0.12) 40deg,
+    rgba(56, 189, 248, 0.12) 40deg,
     transparent 90deg,
     rgba(14, 203, 129, 0.08) 160deg,
     transparent 220deg
@@ -202,7 +202,7 @@ button {
   transform: translateX(-50%);
   font-size: 5.5rem;
   opacity: 0.9;
-  filter: drop-shadow(0 0 40px rgba(252, 213, 53, 0.25));
+  filter: drop-shadow(0 0 40px rgba(56, 189, 248, 0.25));
 }
 
 .hero-copy {
@@ -217,9 +217,9 @@ button {
   margin-top: 20px;
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(252, 213, 53, 0.1);
-  border: 1px solid rgba(252, 213, 53, 0.28);
-  color: var(--yellow);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: var(--accent);
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: 0.85rem;
@@ -254,22 +254,22 @@ button {
 }
 
 .btn-primary {
-  background: var(--yellow);
-  color: var(--yellow-ink);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .btn-primary:hover {
-  background: var(--yellow-press);
+  background: var(--accent-press);
 }
 
 .btn-solid {
   width: 100%;
-  background: var(--yellow);
-  color: var(--yellow-ink);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .btn-solid:hover {
-  background: var(--yellow-press);
+  background: var(--accent-press);
 }
 
 .btn-buy {
@@ -335,7 +335,7 @@ button {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .live-dot {
@@ -361,7 +361,7 @@ button {
   font-family: var(--font-mono);
   font-size: 1.05rem;
   font-weight: 600;
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .balance-pill {
@@ -456,7 +456,7 @@ button {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--yellow);
+  color: var(--accent);
   border-radius: 8px;
 }
 
@@ -608,7 +608,7 @@ button {
 }
 
 .qty-row input:focus {
-  border-color: var(--yellow);
+  border-color: var(--accent);
 }
 
 .qty-presets {
@@ -632,9 +632,9 @@ button {
 }
 
 .chip.active {
-  background: rgba(252, 213, 53, 0.12);
-  color: var(--yellow);
-  border-color: rgba(252, 213, 53, 0.45);
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent);
+  border-color: rgba(56, 189, 248, 0.45);
 }
 
 .chip.ghost-back {
@@ -690,8 +690,8 @@ button {
 }
 
 .nav button.active {
-  color: var(--yellow);
-  background: rgba(252, 213, 53, 0.08);
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.08);
 }
 
 .nav .ico {
@@ -726,8 +726,8 @@ button {
   max-width: min(420px, calc(100% - 24px));
   padding: 12px 16px;
   border-radius: var(--radius);
-  background: var(--yellow);
-  color: var(--yellow-ink);
+  background: var(--accent);
+  color: var(--accent-ink);
   font-weight: 700;
   font-size: 0.88rem;
   animation: rise 240ms ease;
@@ -738,8 +738,8 @@ button {
   margin: 14px 0 4px;
   padding: 12px;
   border-radius: var(--radius);
-  background: rgba(252, 213, 53, 0.06);
-  border: 1px dashed rgba(252, 213, 53, 0.22);
+  background: rgba(56, 189, 248, 0.06);
+  border: 1px dashed rgba(56, 189, 248, 0.22);
   font-size: 0.82rem;
   color: var(--text-muted);
   line-height: 1.4;
@@ -775,8 +775,8 @@ button {
   font-weight: 700;
   padding: 4px 8px;
   border-radius: 4px;
-  background: rgba(252, 213, 53, 0.14);
-  color: var(--yellow);
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--accent);
   letter-spacing: 0.04em;
 }
 
@@ -793,9 +793,54 @@ button {
   background: linear-gradient(
     90deg,
     transparent,
-    var(--yellow),
+    var(--accent),
     transparent
   );
   background-size: 200% 100%;
   animation: shimmer 1.2s linear infinite;
+}
+
+/* —— Live chart —— */
+.chart-card {
+  margin: 10px 0 14px;
+  padding: 10px 10px 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.chart-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+
+.chart-meta .label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.chart-meta .chg {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: 140px;
+}
+
+.chart-range {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
 }

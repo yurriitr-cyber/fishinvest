@@ -25,16 +25,19 @@ export function Market({
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .fish()
-      .then((data) => {
+    async function load() {
+      try {
+        const data = await api.fish();
         if (!cancelled) setFish(data);
-      })
-      .catch((e) => {
+      } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed');
-      });
+      }
+    }
+    load();
+    const id = setInterval(load, 3000);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, []);
 

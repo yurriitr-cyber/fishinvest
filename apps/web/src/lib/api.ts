@@ -27,6 +27,21 @@ export type Fish = {
   imageUrl: string | null;
 };
 
+export type PricePoint = {
+  id: string;
+  price: string;
+  previousPrice: string;
+  changePercent: string;
+  source: string;
+  createdAt: string;
+};
+
+export type FishHistory = {
+  fishId: string;
+  symbol: string;
+  history: PricePoint[];
+};
+
 export type Portfolio = {
   balance: string;
   totalInvested: string;
@@ -179,6 +194,8 @@ export const api = {
   me: () => request<Me>('/me'),
   fish: () => request<Fish[]>('/fish'),
   fishOne: (id: string) => request<Fish>(`/fish/${id}`),
+  fishHistory: (id: string, limit = 80) =>
+    request<FishHistory>(`/fish/${id}/history?limit=${limit}`),
   portfolio: () => request<Portfolio>('/portfolio'),
   buy: (fishId: string, quantity: number, idempotencyKey?: string) =>
     request('/trade/buy', {
