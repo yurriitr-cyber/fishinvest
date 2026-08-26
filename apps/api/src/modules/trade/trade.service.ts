@@ -41,7 +41,24 @@ export class TradeService {
           throw new BadRequestException('Trading for this fish is frozen');
         }
 
-        const qty = new Prisma.Decimal(quantity);
+        const qtyInt = Math.floor(Number(quantity));
+        if (!Number.isFinite(qtyInt) || qtyInt < 1) {
+          throw new BadRequestException('Quantity must be at least 1');
+        }
+
+        const reserved = await tx.fish.updateMany({
+          where: { id: fishId, availableSupply: { gte: qtyInt } },
+          data: { availableSupply: { decrement: qtyInt } },
+        });
+        if (reserved.count === 0) {
+          throw new BadRequestException(
+            fish.availableSupply <= 0
+              ? 'Sold out'
+              : `Only ${fish.availableSupply} available`,
+          );
+        }
+
+        const qty = new Prisma.Decimal(qtyInt);
         const unitPrice = fish.currentPrice;
         const totalAmount = unitPrice.mul(qty);
 
@@ -132,7 +149,12 @@ export class TradeService {
           throw new BadRequestException('Trading for this fish is frozen');
         }
 
-        const qty = new Prisma.Decimal(quantity);
+        const qtyInt = Math.floor(Number(quantity));
+        if (!Number.isFinite(qtyInt) || qtyInt < 1) {
+          throw new BadRequestException('Quantity must be at least 1');
+        }
+
+        const qty = new Prisma.Decimal(qtyInt);
         const position = await tx.portfolioPosition.findUnique({
           where: { userId_fishId: { userId, fishId } },
         });
@@ -166,6 +188,18 @@ export class TradeService {
               totalInvested: remainingInvested,
               realizedPnl: position.realizedPnl.add(realizedPnl),
             },
+          });
+        }
+
+        // Return sold units to market supply (never above totalSupply)
+        const afterSell = await tx.fish.update({
+          where: { id: fishId },
+          data: { availableSupply: { increment: qtyInt } },
+        });
+        if (afterSell.availableSupply > afterSell.totalSupply) {
+          await tx.fish.update({
+            where: { id: fishId },
+            data: { availableSupply: afterSell.totalSupply },
           });
         }
 

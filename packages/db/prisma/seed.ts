@@ -3,36 +3,64 @@ import { generateReferralCode } from '@rare-fish/shared';
 
 const prisma = new PrismaClient();
 
-const FISH_SEED = [
-  { symbol: 'AROWANA', name: 'Golden Arowana', rarity: FishRarity.LEGENDARY, price: 124, volatility: 0.15, trend: 0.03 },
-  { symbol: 'QKOI', name: 'Quantum Koi', rarity: FishRarity.EPIC, price: 89, volatility: 0.12, trend: 0.02 },
-  { symbol: 'DGUPPY', name: 'Diamond Guppy', rarity: FishRarity.RARE, price: 45, volatility: 0.18, trend: 0.01 },
-  { symbol: 'EPUFFER', name: 'Emperor Puffer', rarity: FishRarity.EPIC, price: 156, volatility: 0.14, trend: -0.01 },
-  { symbol: 'BDRAGON', name: 'Black Dragonfish', rarity: FishRarity.LEGENDARY, price: 210, volatility: 0.2, trend: 0.04 },
-  { symbol: 'CBETTA', name: 'Cosmic Betta', rarity: FishRarity.RARE, price: 67, volatility: 0.16, trend: 0.025 },
-  { symbol: 'ASHARK', name: 'Albino Shark', rarity: FishRarity.EPIC, price: 178, volatility: 0.13, trend: 0.015 },
-  { symbol: 'MWHALE', name: 'Mega Whale', rarity: FishRarity.MYTHIC, price: 420, volatility: 0.22, trend: 0.05 },
-  // +10 listings
-  { symbol: 'NEON', name: 'Neon Tetra', rarity: FishRarity.COMMON, price: 2.4, volatility: 0.22, trend: 0.01 },
-  { symbol: 'CLOWN', name: 'Anomaly Clownfish', rarity: FishRarity.RARE, price: 14.5, volatility: 0.18, trend: 0.02 },
-  { symbol: 'ANGEL', name: 'Moon Angel', rarity: FishRarity.EPIC, price: 96, volatility: 0.14, trend: 0.015 },
-  { symbol: 'STING', name: 'Void Stingray', rarity: FishRarity.LEGENDARY, price: 248, volatility: 0.19, trend: 0.03 },
-  { symbol: 'HORSE', name: 'Pixel Seahorse', rarity: FishRarity.RARE, price: 28, volatility: 0.17, trend: 0.01 },
-  { symbol: 'BARRA', name: 'Laser Barracuda', rarity: FishRarity.EPIC, price: 112, volatility: 0.16, trend: -0.01 },
-  { symbol: 'GLDFSH', name: 'Glitch Goldfish', rarity: FishRarity.COMMON, price: 1.75, volatility: 0.25, trend: 0.005 },
-  { symbol: 'MANTA', name: 'Deep Manta', rarity: FishRarity.MYTHIC, price: 365, volatility: 0.2, trend: 0.04 },
-  { symbol: 'PIRANA', name: 'Chaos Piranha', rarity: FishRarity.EPIC, price: 74, volatility: 0.21, trend: 0.02 },
-  { symbol: 'CATFSH', name: 'Abyss Catfish', rarity: FishRarity.RARE, price: 19.2, volatility: 0.15, trend: 0.008 },
+/**
+ * Price ladder: cheapest ~100 fish / 1⭐ (0.01), mythic up to ~1000⭐.
+ * Supply shrinks as price rises. Volatility falls as price rises.
+ */
+const FISH_SEED: Array<{
+  symbol: string;
+  name: string;
+  rarity: FishRarity;
+  price: number;
+  supply: number;
+  volatility: number;
+  trend: number;
+}> = [
+  { symbol: 'GLDFSH', name: 'Glitch Goldfish', rarity: FishRarity.COMMON, price: 0.01, supply: 500_000, volatility: 0.42, trend: 0.002 },
+  { symbol: 'NEON', name: 'Neon Tetra', rarity: FishRarity.COMMON, price: 0.02, supply: 400_000, volatility: 0.4, trend: 0.003 },
+  { symbol: 'CATFSH', name: 'Abyss Catfish', rarity: FishRarity.COMMON, price: 0.05, supply: 250_000, volatility: 0.36, trend: 0.004 },
+  { symbol: 'CLOWN', name: 'Anomaly Clownfish', rarity: FishRarity.RARE, price: 0.1, supply: 180_000, volatility: 0.32, trend: 0.005 },
+  { symbol: 'HORSE', name: 'Pixel Seahorse', rarity: FishRarity.RARE, price: 0.25, supply: 120_000, volatility: 0.28, trend: 0.006 },
+  { symbol: 'DGUPPY', name: 'Diamond Guppy', rarity: FishRarity.RARE, price: 0.5, supply: 90_000, volatility: 0.25, trend: 0.008 },
+  { symbol: 'PIRANA', name: 'Chaos Piranha', rarity: FishRarity.RARE, price: 1, supply: 60_000, volatility: 0.22, trend: 0.01 },
+  { symbol: 'CBETTA', name: 'Cosmic Betta', rarity: FishRarity.EPIC, price: 2.5, supply: 40_000, volatility: 0.18, trend: 0.01 },
+  { symbol: 'BARRA', name: 'Laser Barracuda', rarity: FishRarity.EPIC, price: 5, supply: 25_000, volatility: 0.15, trend: 0.008 },
+  { symbol: 'QKOI', name: 'Quantum Koi', rarity: FishRarity.EPIC, price: 12, supply: 15_000, volatility: 0.12, trend: 0.012 },
+  { symbol: 'ANGEL', name: 'Moon Angel', rarity: FishRarity.EPIC, price: 35, supply: 8_000, volatility: 0.1, trend: 0.01 },
+  { symbol: 'AROWANA', name: 'Golden Arowana', rarity: FishRarity.LEGENDARY, price: 80, supply: 5_000, volatility: 0.08, trend: 0.015 },
+  { symbol: 'EPUFFER', name: 'Emperor Puffer', rarity: FishRarity.LEGENDARY, price: 150, supply: 3_000, volatility: 0.065, trend: 0.01 },
+  { symbol: 'ASHARK', name: 'Albino Shark', rarity: FishRarity.LEGENDARY, price: 280, supply: 2_000, volatility: 0.055, trend: 0.012 },
+  { symbol: 'BDRAGON', name: 'Black Dragonfish', rarity: FishRarity.LEGENDARY, price: 450, supply: 1_200, volatility: 0.045, trend: 0.015 },
+  { symbol: 'STING', name: 'Void Stingray', rarity: FishRarity.MYTHIC, price: 650, supply: 800, volatility: 0.035, trend: 0.01 },
+  { symbol: 'MANTA', name: 'Deep Manta', rarity: FishRarity.MYTHIC, price: 850, supply: 400, volatility: 0.028, trend: 0.012 },
+  { symbol: 'MWHALE', name: 'Mega Whale', rarity: FishRarity.MYTHIC, price: 1000, supply: 200, volatility: 0.02, trend: 0.008 },
 ];
 
 async function main() {
-  console.log('Seeding fish...');
+  console.log('Seeding fish (price ladder + supply)…');
 
   for (let i = 0; i < FISH_SEED.length; i++) {
     const f = FISH_SEED[i];
+    const bounds = {
+      minPrice: Math.max(0.001, f.price * 0.2),
+      maxPrice: Math.max(f.price * 4, f.price + 1),
+    };
+
     await prisma.fish.upsert({
       where: { symbol: f.symbol },
-      update: {},
+      update: {
+        name: f.name,
+        rarity: f.rarity,
+        currentPrice: f.price,
+        previousPrice: f.price,
+        allTimeHigh: f.price,
+        allTimeLow: f.price,
+        volatility: f.volatility,
+        trend: f.trend,
+        ...bounds,
+        totalSupply: f.supply,
+        sortOrder: i,
+      },
       create: {
         symbol: f.symbol,
         name: f.name,
@@ -44,9 +72,24 @@ async function main() {
         volatility: f.volatility,
         trend: f.trend,
         momentum: 0,
-        minPrice: Math.max(0.05, f.price * 0.15),
-        maxPrice: f.price * 8,
+        ...bounds,
+        totalSupply: f.supply,
+        availableSupply: f.supply,
         sortOrder: i,
+      },
+    });
+
+    const row = await prisma.fish.findUniqueOrThrow({ where: { symbol: f.symbol } });
+    const held = await prisma.portfolioPosition.aggregate({
+      where: { fishId: row.id },
+      _sum: { quantity: true },
+    });
+    const heldQty = Math.floor(Number(held._sum.quantity ?? 0));
+    await prisma.fish.update({
+      where: { id: row.id },
+      data: {
+        totalSupply: f.supply,
+        availableSupply: Math.max(0, f.supply - heldQty),
       },
     });
   }
@@ -90,7 +133,7 @@ async function main() {
     },
   });
 
-  console.log(`Seeded ${FISH_SEED.length} fish and payment config.`);
+  console.log(`Seeded ${FISH_SEED.length} fish with supply + price ladder.`);
   console.log('Sample referral code generator:', generateReferralCode());
 }
 

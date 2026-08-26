@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PriceChart } from '../components/PriceChart';
 import { api, type Fish } from '../lib/api';
-import { fishGlyph, formatPct, formatStars, pnlClass } from '../lib/format';
+import {
+  formatPct,
+  formatStars,
+  formatSupply,
+  pnlClass,
+} from '../lib/format';
 
 export function Trade({
   fishId,
@@ -22,10 +28,24 @@ export function Trade({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.fishOne(fishId).then(setFish).catch((e) => setError(e.message));
+    let cancelled = false;
+    async function load() {
+      try {
+        const data = await api.fishOne(fishId);
+        if (!cancelled) setFish(data);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed');
+      }
+    }
+    load();
+    const id = setInterval(load, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [fishId]);
 
-  const quantity = Number(qty) || 0;
+  const quantity = Math.floor(Number(qty)) || 0;
   const total = useMemo(() => {
     if (!fish) return 0;
     return Number(fish.currentPrice) * quantity;
@@ -39,6 +59,8 @@ export function Trade({
       const key = `${side}:${fish.id}:${Date.now()}`;
       if (side === 'buy') await api.buy(fish.id, quantity, key);
       else await api.sell(fish.id, quantity, key);
+      const refreshed = await api.fishOne(fish.id);
+      setFish(refreshed);
       await onTraded();
       notify(
         side === 'buy'
@@ -61,6 +83,8 @@ export function Trade({
     );
   }
 
+  const soldOut = fish ? fish.availableSupply <= 0 : false;
+
   return (
     <div className="screen">
       <button className="chip ghost-back" type="button" onClick={onBack}>
@@ -74,13 +98,11 @@ export function Trade({
           <div className="topbar">
             <div>
               <div className="eyebrow">{fish.rarity}</div>
-              <h1>
-                {fishGlyph(fish.symbol)} {fish.symbol}
-              </h1>
+              <h1>{fish.symbol}</h1>
               <p>{fish.name}</p>
             </div>
             <div className="balance-pill">
-              <div className="label">Available</div>
+              <div className="label">Balance</div>
               <div className="value">⭐ {formatStars(balance)}</div>
             </div>
           </div>
@@ -91,6 +113,17 @@ export function Trade({
               {formatPct(fish.dailyChangePercent)}
             </span>
           </div>
+          <p className="supply-meta">
+            {formatSupply(fish.availableSupply)} / {formatSupply(fish.totalSupply)}{' '}
+            available
+            {soldOut ? ' · sold out' : ''}
+          </p>
+
+          <PriceChart
+            fishId={fish.id}
+            livePrice={fish.currentPrice}
+            volatility={fish.volatility}
+          />
 
           <div className="ticker">
             <div className="ticker-card">
@@ -126,13 +159,13 @@ export function Trade({
             </div>
             <div className="qty-row">
               <input
-                inputMode="decimal"
+                inputMode="numeric"
                 value={qty}
-                onChange={(e) => setQty(e.target.value)}
+                onChange={(e) => setQty(e.target.value.replace(/[^\d]/g, ''))}
               />
             </div>
             <div className="qty-presets">
-              {['1', '5', '10', '25'].map((n) => (
+              {['1', '5', '10', '25', '100'].map((n) => (
                 <button
                   key={n}
                   className={`chip ${qty === n ? 'active' : ''}`}
@@ -150,7 +183,7 @@ export function Trade({
                 <div className="value">⭐ {formatStars(total, 2)}</div>
               </div>
               <div className="summary-item">
-                <div className="label">Est. fill</div>
+                <div className="label">Fill</div>
                 <div className="value">
                   {formatStars(fish.currentPrice, 2)} × {quantity || 0}
                 </div>
@@ -160,12 +193,19 @@ export function Trade({
             <button
               className={`btn ${side === 'buy' ? 'btn-buy' : 'btn-sell'}`}
               type="button"
-              disabled={busy || fish.isFrozen || quantity <= 0}
+              disabled={
+                busy ||
+                fish.isFrozen ||
+                quantity <= 0 ||
+                (side === 'buy' && soldOut)
+              }
               onClick={submit}
             >
               {busy
                 ? 'Submitting…'
-                : `${side === 'buy' ? 'Buy' : 'Sell'} ${fish.symbol}`}
+                : side === 'buy' && soldOut
+                  ? 'Sold out'
+                  : `${side === 'buy' ? 'Buy' : 'Sell'} ${fish.symbol}`}
             </button>
           </div>
         </>

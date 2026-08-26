@@ -22,13 +22,18 @@ function parseIntervalMs(value: string | undefined): number {
   }
 }
 
-/** Absolute $ move per tick — big fish ~$1–2, cheap fish cents. */
-function tickStep(price: number): number {
-  if (price >= 200) return 0.9 + Math.random() * 1.4;
-  if (price >= 80) return 0.5 + Math.random() * 1.2;
-  if (price >= 20) return 0.12 + Math.random() * 0.7;
-  if (price >= 5) return 0.03 + Math.random() * 0.15;
-  return 0.005 + Math.random() * 0.04;
+/**
+ * Absolute move per tick. Cheap / high-vol fish swing hard (as %);
+ * expensive / low-vol fish stay nearly flat.
+ */
+function tickStep(price: number, volatility: number): number {
+  const vol = Math.max(0.01, volatility);
+  // Relative swing: vol 0.42 → ~3–6% ticks; vol 0.02 → ~0.1–0.3%
+  const pct = vol * (0.06 + Math.random() * 0.08);
+  const abs = price * pct;
+  // Floor so ultra-cheap fish still visibly jitter on chart
+  const floor = price < 0.1 ? 0.0005 : price < 1 ? 0.002 : 0.01;
+  return Math.max(floor, abs);
 }
 
 @Injectable()
@@ -107,21 +112,23 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
     const momentum = Number(fish.momentum);
     const vol = Number(fish.volatility);
 
-    // Mean-reversion toward recent level + small trend drift
+    // Mean-reversion is weaker for high-vol (chaotic) fish
     const anchor = previous || current;
-    const pull = (anchor - current) * 0.18;
-    const drift = current * trend * 0.002;
-    const step = tickStep(current) * (0.6 + vol);
+    const pullStrength = Math.max(0.04, 0.22 - vol * 0.35);
+    const pull = (anchor - current) * pullStrength;
+    const drift = current * trend * 0.0015;
+    const step = tickStep(current, vol);
     const noise = (Math.random() * 2 - 1) * step;
 
-    let delta = pull + drift + noise + momentum * current * 0.05;
+    let delta = pull + drift + noise + momentum * current * 0.04;
 
     if (eventMultiplier) {
-      delta += current * (Number(eventMultiplier) - 1) * 0.04;
+      delta += current * (Number(eventMultiplier) - 1) * 0.03;
     }
 
-    // Cap single-tick move relative to price (keeps chart readable)
-    const maxAbs = Math.max(step * 1.8, current * 0.04);
+    // Cap: high vol can move more %; mythic stays tight
+    const maxPct = Math.min(0.12, Math.max(0.008, vol * 0.25));
+    const maxAbs = Math.max(step * 1.5, current * maxPct);
     delta = Math.max(-maxAbs, Math.min(maxAbs, delta));
 
     let newPrice = current + delta;

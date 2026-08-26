@@ -23,8 +23,12 @@ export type Fish = {
   dailyChangePercent: string;
   allTimeHigh: string;
   allTimeLow: string;
+  volatility?: string;
+  totalSupply: number;
+  availableSupply: number;
   isFrozen: boolean;
   imageUrl: string | null;
+  sortOrder?: number;
 };
 
 export type PricePoint = {

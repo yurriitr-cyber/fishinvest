@@ -14,6 +14,14 @@ export function formatPct(value: string | number) {
   return `${sign}${n.toFixed(1)}%`;
 }
 
+export function formatSupply(value: number) {
+  if (!Number.isFinite(value)) return '—';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `${Math.round(value / 1000)}k`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(value);
+}
+
 export function pnlClass(value: string | number) {
   const n = typeof value === 'string' ? Number(value) : value;
   if (n > 0) return 'up';
@@ -21,27 +29,9 @@ export function pnlClass(value: string | number) {
   return 'flat';
 }
 
-export const FISH_GLYPH: Record<string, string> = {
-  AROWANA: '𓆝',
-  QKOI: '𓆟',
-  DGUPPY: '𓆜',
-  EPUFFER: '🐡',
-  BDRAGON: '𓆞',
-  CBETTA: '𓆛',
-  ASHARK: '🦈',
-  MWHALE: '🐋',
-  NEON: '✨',
-  CLOWN: '🐠',
-  ANGEL: '👼',
-  STING: '🛸',
-  HORSE: '🐴',
-  BARRA: '⚡',
-  GLDFSH: '🥇',
-  MANTA: '🦇',
-  PIRANA: '🦷',
-  CATFSH: '🐱',
-};
-
+/** Short monogram for list rows — no emoji. */
 export function fishGlyph(symbol: string) {
-  return FISH_GLYPH[symbol] || '🐟';
+  const s = symbol.toUpperCase();
+  if (s.length <= 3) return s;
+  return s.slice(0, 2);
 }

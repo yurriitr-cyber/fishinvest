@@ -63,6 +63,8 @@ export class FishService {
     volatility: Prisma.Decimal;
     trend: Prisma.Decimal;
     momentum: Prisma.Decimal;
+    totalSupply: number;
+    availableSupply: number;
     isFrozen: boolean;
     imageUrl: string | null;
     sortOrder: number;
@@ -81,6 +83,8 @@ export class FishService {
       volatility: f.volatility.toFixed(6),
       trend: f.trend.toFixed(6),
       momentum: f.momentum.toFixed(6),
+      totalSupply: f.totalSupply,
+      availableSupply: f.availableSupply,
       isFrozen: f.isFrozen,
       imageUrl: f.imageUrl,
       sortOrder: f.sortOrder,

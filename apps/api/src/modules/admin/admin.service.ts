@@ -145,8 +145,10 @@ export class AdminService {
         volatility: data.volatility ?? 0.1,
         trend: data.trend ?? 0,
         momentum: 0,
-        minPrice: Math.max(1, data.currentPrice * 0.1),
-        maxPrice: data.currentPrice * 10,
+        minPrice: Math.max(0.001, data.currentPrice * 0.1),
+        maxPrice: Math.max(data.currentPrice * 4, data.currentPrice + 1),
+        totalSupply: 10000,
+        availableSupply: 10000,
       },
     });
     await this.log(admin.id, 'CREATE_FISH', 'fish', fish.id, null, fish);

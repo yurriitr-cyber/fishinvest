@@ -7,12 +7,15 @@ type Point = { t: number; p: number };
 export function PriceChart({
   fishId,
   livePrice,
+  volatility,
 }: {
   fishId: string;
   livePrice: string;
+  volatility?: string;
 }) {
   const [points, setPoints] = useState<Point[]>([]);
   const price = Number(livePrice);
+  const vol = Number(volatility ?? 0.15);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +33,6 @@ export function PriceChart({
             t: new Date(h.createdAt).getTime(),
             p: Number(h.price),
           }));
-        // Always append latest quote so the line breathes
         series.push({ t: Date.now(), p: Number(fish.currentPrice) });
         setPoints(series.slice(-80));
       } catch {
@@ -46,7 +48,6 @@ export function PriceChart({
     };
   }, [fishId]);
 
-  // Micro-jitter between server ticks so the chart feels alive
   useEffect(() => {
     if (!Number.isFinite(price)) return;
     const id = setInterval(() => {
@@ -55,20 +56,14 @@ export function PriceChart({
           return [{ t: Date.now(), p: price }];
         }
         const last = prev[prev.length - 1];
-        const step =
-          price >= 80
-            ? (Math.random() - 0.5) * 0.35
-            : price >= 10
-              ? (Math.random() - 0.5) * 0.08
-              : (Math.random() - 0.5) * 0.015;
-        // Pull slightly toward live server price
-        const next = last.p * 0.85 + price * 0.15 + step;
-        const nextPts = [...prev, { t: Date.now(), p: next }];
-        return nextPts.slice(-100);
+        const amplitude = Math.max(price * vol * 0.008, price < 1 ? 0.0002 : 0.005);
+        const step = (Math.random() - 0.5) * 2 * amplitude;
+        const next = last.p * 0.82 + price * 0.18 + step;
+        return [...prev, { t: Date.now(), p: next }].slice(-100);
       });
     }, 700);
     return () => clearInterval(id);
-  }, [fishId, price]);
+  }, [fishId, price, vol]);
 
   const { path, area, min, max, change } = useMemo(() => {
     if (points.length < 2) {
@@ -81,7 +76,7 @@ export function PriceChart({
     const yMin = lo - pad;
     const yMax = hi + pad;
     const w = 320;
-    const h = 140;
+    const h = 128;
     const coords = points.map((pt, i) => {
       const x = (i / (points.length - 1)) * w;
       const y = h - ((pt.p - yMin) / (yMax - yMin)) * h;
@@ -98,7 +93,7 @@ export function PriceChart({
   return (
     <div className={`chart-card ${up ? 'up' : 'down'}`}>
       <div className="chart-meta">
-        <span className="label">Live · 1s ticks</span>
+        <span className="label">Price</span>
         <span className={`chg ${pnlClass(change)}`}>
           {change >= 0 ? '+' : ''}
           {change.toFixed(2)}%
@@ -106,7 +101,7 @@ export function PriceChart({
       </div>
       <svg
         className="chart-svg"
-        viewBox="0 0 320 140"
+        viewBox="0 0 320 128"
         preserveAspectRatio="none"
         aria-hidden
       >
@@ -114,12 +109,12 @@ export function PriceChart({
           <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
             <stop
               offset="0%"
-              stopColor={up ? '#0ecb81' : '#f6465d'}
-              stopOpacity="0.35"
+              stopColor={up ? '#3ecf8e' : '#ef5b6b'}
+              stopOpacity="0.22"
             />
             <stop
               offset="100%"
-              stopColor={up ? '#0ecb81' : '#f6465d'}
+              stopColor={up ? '#3ecf8e' : '#ef5b6b'}
               stopOpacity="0"
             />
           </linearGradient>
@@ -129,8 +124,8 @@ export function PriceChart({
           <path
             d={path}
             fill="none"
-            stroke={up ? '#0ecb81' : '#f6465d'}
-            strokeWidth="2.2"
+            stroke={up ? '#3ecf8e' : '#ef5b6b'}
+            strokeWidth="1.6"
             strokeLinejoin="round"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"

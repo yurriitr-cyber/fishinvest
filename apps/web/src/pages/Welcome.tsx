@@ -11,23 +11,23 @@ export function Welcome({ me, onEnter }: { me: Me; onEnter: () => void }) {
       <div className="hero-visual" aria-hidden />
       <div className="hero-copy">
         <div className="eyebrow">
-          <span className="live-dot" /> Simulated exchange
+          <span className="live-dot" /> Paper market
         </div>
         <h1 className="brand">
           Rare Fish
           <span>Investment</span>
         </h1>
         <p className="lede">
-          Trade meme fish like a pro terminal. Prices thrash. Whales appear.
-          Your game ⭐ are the only real stakes.
+          Finite supply. Live prices. Game credits only — not real Stars on the
+          books until you deposit.
         </p>
         <div className="bonus-chip">
-          Starter · ⭐ {formatStars(total)}
-          {join > 0 ? ' · invite bonus' : ''}
+          Starter ⭐ {formatStars(total)}
+          {join > 0 ? ' · referral bonus' : ''}
         </div>
         <div className="cta-row">
           <button className="btn btn-primary" type="button" onClick={onEnter}>
-            Enter market
+            Open markets
           </button>
         </div>
       </div>
