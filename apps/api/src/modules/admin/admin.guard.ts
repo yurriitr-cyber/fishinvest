@@ -37,8 +37,29 @@ export class AdminGuard implements CanActivate {
     const adminIds = parseAdminTelegramIds(
       this.config.get<string>('ADMIN_TELEGRAM_IDS'),
     );
+    const onAllowlist = adminIds.includes(String(telegramId));
 
-    if (user && !user.isAdmin && adminIds.includes(String(telegramId))) {
+    if (!user && onAllowlist) {
+      const { generateReferralCode } = await import('@rare-fish/shared');
+      let referralCode = generateReferralCode();
+      while (await this.prisma.db.user.findUnique({ where: { referralCode } })) {
+        referralCode = generateReferralCode();
+      }
+      user = await this.prisma.db.user.create({
+        data: {
+          telegramId: BigInt(telegramId),
+          username: initData?.user?.username ?? 'admin',
+          firstName: initData?.user?.firstName ?? 'Admin',
+          isAdmin: true,
+          referralCode,
+          gameBalance: {
+            create: { available: 0 },
+          },
+        },
+      });
+    }
+
+    if (user && !user.isAdmin && onAllowlist) {
       user = await this.prisma.db.user.update({
         where: { id: user.id },
         data: { isAdmin: true },

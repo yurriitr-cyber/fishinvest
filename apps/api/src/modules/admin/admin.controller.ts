@@ -9,13 +9,16 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  IsArray,
   IsBoolean,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { User } from '@rare-fish/db';
 import { AdminUser } from './admin.decorator';
 import { AdminGuard } from './admin.guard';
@@ -65,6 +68,18 @@ class BanDto {
   @IsOptional() @IsString() reason?: string;
 }
 
+class DailyTargetItemDto {
+  @IsUUID() fishId!: string;
+  @IsNumber() percent!: number;
+}
+
+class DailyTargetsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DailyTargetItemDto)
+  targets!: DailyTargetItemDto[];
+}
+
 @Controller('admin')
 @UseGuards(AdminGuard)
 export class AdminController {
@@ -78,6 +93,21 @@ export class AdminController {
   @Get('fish')
   listFish(): Promise<any> {
     return this.admin.listFish();
+  }
+
+  @Post('fish/daily-targets')
+  setDailyTargets(
+    @AdminUser() admin: User,
+    @Body() dto: DailyTargetsDto,
+  ): Promise<any> {
+    const targets = Array.isArray(dto.targets) ? dto.targets : [];
+    return this.admin.setDailyTargets(
+      admin,
+      targets.map((t) => ({
+        fishId: t.fishId,
+        percent: Number(t.percent),
+      })),
+    );
   }
 
   @Post('fish')

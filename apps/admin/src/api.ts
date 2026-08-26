@@ -1,18 +1,36 @@
 const TG_ID_KEY = 'rf_admin_tg_id';
+const SECRET_KEY = 'rf_admin_secret';
 
 export function getDevTelegramId() {
-  return localStorage.getItem(TG_ID_KEY) || '1001';
+  return localStorage.getItem(TG_ID_KEY) || '';
 }
 
 export function setDevTelegramId(id: string) {
   localStorage.setItem(TG_ID_KEY, id);
 }
 
+export function getAdminSecret() {
+  return localStorage.getItem(SECRET_KEY) || '';
+}
+
+export function setAdminSecret(secret: string) {
+  localStorage.setItem(SECRET_KEY, secret);
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
   headers.set('Authorization', 'tma unused');
-  headers.set('x-dev-telegram-id', getDevTelegramId());
+
+  const tgId = getDevTelegramId();
+  const secret = getAdminSecret();
+  if (tgId) {
+    headers.set('x-admin-telegram-id', tgId);
+    headers.set('x-dev-telegram-id', tgId);
+  }
+  if (secret) {
+    headers.set('x-admin-secret', secret);
+  }
 
   const res = await fetch(`/api${path}`, { ...init, headers });
   if (!res.ok) {
@@ -30,9 +48,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const adminApi = {
-  me: () => request<{ isAdmin: boolean; firstName: string | null; telegramId: string }>('/me'),
+  me: () =>
+    request<{ isAdmin: boolean; firstName: string | null; telegramId: string }>(
+      '/me',
+    ),
   dashboard: () => request<Record<string, unknown>>('/admin/dashboard'),
   fish: () => request<Fish[]>('/admin/fish'),
+  setDailyTargets: (targets: Array<{ fishId: string; percent: number }>) =>
+    request<{ updated: number }>('/admin/fish/daily-targets', {
+      method: 'POST',
+      body: JSON.stringify({ targets }),
+    }),
   setPrice: (id: string, price: number) =>
     request(`/admin/fish/${id}/set-price`, {
       method: 'POST',
@@ -44,7 +70,8 @@ export const adminApi = {
       body: JSON.stringify({ percent }),
     }),
   freeze: (id: string) => request(`/admin/fish/${id}/freeze`, { method: 'POST' }),
-  unfreeze: (id: string) => request(`/admin/fish/${id}/unfreeze`, { method: 'POST' }),
+  unfreeze: (id: string) =>
+    request(`/admin/fish/${id}/unfreeze`, { method: 'POST' }),
   updateFish: (id: string, data: Record<string, unknown>) =>
     request(`/admin/fish/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   createEvent: (data: Record<string, unknown>) =>
@@ -78,11 +105,14 @@ export type Fish = {
   currentPrice?: string | number;
   price?: string | number;
   dailyChangePercent?: string | number;
+  dailyTargetPercent?: string | number;
   change?: string | number;
   volatility?: string | number;
   trend?: string | number;
   isFrozen?: boolean;
   isActive?: boolean;
+  minPrice?: string | number;
+  maxPrice?: string | number;
 };
 
 export type Deposit = {
@@ -115,7 +145,19 @@ export type AdminUser = {
 };
 
 export type AdminUserDetail = AdminUser & {
-  ledgerEntries: Array<{ type: string; amount: string | number; createdAt: string }>;
-  deposits: Array<{ id: string; provider: string; status: string; gameCreditAmount: string | number | null }>;
-  portfolioPositions: Array<{ quantity: string | number; fish: { symbol: string; currentPrice: string | number } }>;
+  ledgerEntries: Array<{
+    type: string;
+    amount: string | number;
+    createdAt: string;
+  }>;
+  deposits: Array<{
+    id: string;
+    provider: string;
+    status: string;
+    gameCreditAmount: string | number | null;
+  }>;
+  portfolioPositions: Array<{
+    quantity: string | number;
+    fish: { symbol: string; currentPrice: string | number };
+  }>;
 };

@@ -119,7 +119,28 @@ export class AdminService {
   }
 
   async listFish() {
-    return this.prisma.db.fish.findMany({ orderBy: { sortOrder: 'asc' } });
+    const fish = await this.prisma.db.fish.findMany({
+      orderBy: { sortOrder: 'asc' },
+    });
+    return fish.map((f) => ({
+      id: f.id,
+      symbol: f.symbol,
+      name: f.name,
+      rarity: f.rarity,
+      currentPrice: f.currentPrice.toFixed(4),
+      previousPrice: f.previousPrice.toFixed(4),
+      dailyChangePercent: f.dailyChangePercent.toFixed(4),
+      dailyTargetPercent: f.dailyTargetPercent.toFixed(4),
+      volatility: f.volatility.toFixed(6),
+      trend: f.trend.toFixed(6),
+      totalSupply: f.totalSupply,
+      availableSupply: f.availableSupply,
+      minPrice: f.minPrice.toFixed(4),
+      maxPrice: f.maxPrice.toFixed(4),
+      isFrozen: f.isFrozen,
+      isActive: f.isActive,
+      sortOrder: f.sortOrder,
+    }));
   }
 
   async createFish(admin: User, data: {
@@ -167,6 +188,10 @@ export class AdminService {
         rarity: data.rarity as never,
         volatility: data.volatility != null ? Number(data.volatility) : undefined,
         trend: data.trend != null ? Number(data.trend) : undefined,
+        dailyTargetPercent:
+          data.dailyTargetPercent != null
+            ? Number(data.dailyTargetPercent)
+            : undefined,
         isActive: data.isActive as boolean | undefined,
         minPrice: data.minPrice != null ? Number(data.minPrice) : undefined,
         maxPrice: data.maxPrice != null ? Number(data.maxPrice) : undefined,
@@ -220,6 +245,67 @@ export class AdminService {
     if (!fish) throw new NotFoundException('Fish not found');
     const next = Number(fish.currentPrice) * (1 + percent / 100);
     return this.setPrice(admin, id, Math.round(next * 10000) / 10000, `${percent}%`);
+  }
+
+  /**
+   * Set expected % move over ~24h. Also widens min/max so the path isn't clipped.
+   */
+  async setDailyTargets(
+    admin: User,
+    targets: Array<{ fishId: string; percent: number }>,
+  ) {
+    const results = [];
+    for (const t of targets) {
+      if (!Number.isFinite(t.percent) || t.percent < -90 || t.percent > 500) {
+        throw new BadRequestException(
+          `Invalid daily target for ${t.fishId}: ${t.percent}`,
+        );
+      }
+      const fish = await this.prisma.db.fish.findUnique({ where: { id: t.fishId } });
+      if (!fish) throw new NotFoundException(`Fish not found: ${t.fishId}`);
+
+      const price = Number(fish.currentPrice);
+      const abs = Math.abs(t.percent);
+      // ~2 weeks of room at this daily rate (or at least 3× / 0.3×)
+      const growthRoom = Math.pow(1 + abs / 100, 14);
+      const nextMax =
+        t.percent >= 0
+          ? Math.max(Number(fish.maxPrice), price * Math.max(3, growthRoom))
+          : Number(fish.maxPrice);
+      const nextMin =
+        t.percent <= 0
+          ? Math.min(
+              Number(fish.minPrice),
+              Math.max(0.001, price / Math.max(3, growthRoom)),
+            )
+          : Number(fish.minPrice);
+
+      const after = await this.prisma.db.fish.update({
+        where: { id: t.fishId },
+        data: {
+          dailyTargetPercent: t.percent,
+          maxPrice: nextMax,
+          minPrice: nextMin,
+        },
+      });
+      await this.log(
+        admin.id,
+        'SET_DAILY_TARGET',
+        'fish',
+        t.fishId,
+        { dailyTargetPercent: fish.dailyTargetPercent },
+        { dailyTargetPercent: t.percent, maxPrice: nextMax, minPrice: nextMin },
+      );
+      results.push({
+        id: after.id,
+        symbol: after.symbol,
+        dailyTargetPercent: after.dailyTargetPercent.toFixed(4),
+        currentPrice: after.currentPrice.toFixed(4),
+        minPrice: after.minPrice.toFixed(4),
+        maxPrice: after.maxPrice.toFixed(4),
+      });
+    }
+    return { updated: results.length, fish: results };
   }
 
   async freeze(admin: User, id: string, frozen: boolean) {

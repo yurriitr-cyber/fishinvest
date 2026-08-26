@@ -55,6 +55,7 @@ TELEGRAM_BOT_TOKEN=<from BotFather — revoke if it was leaked>
 TELEGRAM_BOT_USERNAME=rarefishinvestment_bot
 TELEGRAM_MINI_APP_NAME=app
 INTERNAL_API_SECRET=<long random string>
+ADMIN_API_SECRET=<long random string — used to sign into /admin>
 ADMIN_TELEGRAM_IDS=<your telegram user id>
 STARS_TO_GAME_CREDIT_RATE=1
 STARS_DEPOSIT_FEE_PERCENT=0
@@ -106,16 +107,25 @@ API_INTERNAL_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}/api
 2. Deploy **web** — open `https://<web-domain>/` and confirm the UI loads; `/api/health` via the web host should return ok.
 3. Deploy **bot** — logs should show `Bot @… running` and the `WEBAPP_URL`.
 
-## 5. BotFather
+## 5. Admin console (daily fish growth)
+
+URL: `https://<web.RAILWAY_PUBLIC_DOMAIN>/admin/`
+
+1. Set on **api**: `ADMIN_API_SECRET` (long random) and `ADMIN_TELEGRAM_IDS` (your numeric Telegram id from `@userinfobot`).
+2. Open `/admin/`, paste Telegram id + secret → **Sign in**.
+3. Tab **Daily growth**: enter e.g. `15` for +15%/day per fish → **Save all**.
+   Prices drift toward that target over ~24h (not an instant jump). Use **Prices** tab for one-shot bumps.
+
+## 6. BotFather
 
 1. `/mybots` → your bot → **Bot Settings** → **Menu Button** / **Configure Mini App**.
 2. Set URL to: `https://<web.RAILWAY_PUBLIC_DOMAIN>`
 3. Open the bot → **/start** → Open Mini App.
 
-## 6. Security
+## 7. Security
 
 - If the bot token was pasted in chat earlier, run **/revoke** in BotFather and update `TELEGRAM_BOT_TOKEN` on Railway.
-- Keep `INTERNAL_API_SECRET` long and private (Stars payment confirm).
+- Keep `INTERNAL_API_SECRET` and `ADMIN_API_SECRET` long and private.
 
 ## Local still works
 

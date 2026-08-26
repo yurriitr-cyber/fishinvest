@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
   adminApi,
+  getAdminSecret,
   getDevTelegramId,
+  setAdminSecret,
   setDevTelegramId,
   type AdminUser,
   type AdminUserDetail,
@@ -10,7 +12,7 @@ import {
   type Payment,
 } from './api';
 
-type Tab = 'dashboard' | 'fish' | 'users' | 'payments' | 'deposits';
+type Tab = 'targets' | 'fish' | 'dashboard' | 'users' | 'payments' | 'deposits';
 
 function n(v: string | number | null | undefined, d = 2) {
   const x = Number(v ?? 0);
@@ -18,13 +20,17 @@ function n(v: string | number | null | undefined, d = 2) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('dashboard');
+  const [tab, setTab] = useState<Tab>('targets');
   const [tgId, setTgId] = useState(getDevTelegramId());
+  const [secret, setSecret] = useState(getAdminSecret());
   const [error, setError] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
   const [meOk, setMeOk] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const [dash, setDash] = useState<Record<string, unknown> | null>(null);
   const [fish, setFish] = useState<Fish[]>([]);
+  const [targets, setTargets] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -36,7 +42,11 @@ export default function App() {
     setError(null);
     try {
       const me = await adminApi.me();
-      if (!me.isAdmin) throw new Error('Not an admin. Set ADMIN_TELEGRAM_IDS and reload.');
+      if (!me.isAdmin) {
+        throw new Error(
+          'Not an admin. Add your Telegram ID to ADMIN_TELEGRAM_IDS on the API.',
+        );
+      }
       setMeOk(true);
     } catch (e) {
       setMeOk(false);
@@ -44,8 +54,14 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
+  function saveCreds() {
+    setDevTelegramId(tgId.trim());
+    setAdminSecret(secret.trim());
     boot();
+  }
+
+  useEffect(() => {
+    if (getDevTelegramId() && getAdminSecret()) boot();
   }, []);
 
   useEffect(() => {
@@ -54,7 +70,15 @@ export default function App() {
     (async () => {
       try {
         if (tab === 'dashboard') setDash(await adminApi.dashboard());
-        if (tab === 'fish') setFish(await adminApi.fish());
+        if (tab === 'fish' || tab === 'targets') {
+          const list = await adminApi.fish();
+          setFish(list);
+          const next: Record<string, string> = {};
+          for (const f of list) {
+            next[f.id] = String(Number(f.dailyTargetPercent ?? 0));
+          }
+          setTargets(next);
+        }
         if (tab === 'users') setUsers(await adminApi.users(q || undefined));
         if (tab === 'payments') {
           setPayments(await adminApi.paymentSettings());
@@ -67,9 +91,23 @@ export default function App() {
     })();
   }, [tab, meOk]);
 
-  function saveTg() {
-    setDevTelegramId(tgId);
-    boot();
+  async function saveAllTargets() {
+    setBusy(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const payload = fish.map((f) => ({
+        fishId: f.id,
+        percent: Number(targets[f.id] ?? 0),
+      }));
+      const res = await adminApi.setDailyTargets(payload);
+      setOkMsg(`Saved daily targets for ${res.updated} fish`);
+      setFish(await adminApi.fish());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -77,13 +115,14 @@ export default function App() {
       <aside className="side">
         <h1>
           Rare Fish
-          <span>Admin console</span>
+          <span>Admin</span>
         </h1>
         <nav>
           {(
             [
+              ['targets', 'Daily growth'],
+              ['fish', 'Prices'],
               ['dashboard', 'Dashboard'],
-              ['fish', 'Fish market'],
               ['users', 'Users'],
               ['payments', 'Payments'],
               ['deposits', 'Deposits'],
@@ -94,89 +133,136 @@ export default function App() {
               type="button"
               className={tab === id ? 'active' : undefined}
               onClick={() => setTab(id)}
+              disabled={!meOk && id !== 'targets'}
             >
               {label}
             </button>
           ))}
         </nav>
-        <div style={{ marginTop: 24 }}>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-            Dev telegram id
-          </div>
-          <div className="toolbar">
-            <input value={tgId} onChange={(e) => setTgId(e.target.value)} style={{ width: 90 }} />
-            <button type="button" onClick={saveTg}>
-              Use
-            </button>
-          </div>
+        <div className="creds">
+          <div className="muted">Telegram ID</div>
+          <input
+            value={tgId}
+            onChange={(e) => setTgId(e.target.value)}
+            placeholder="123456789"
+          />
+          <div className="muted">Admin secret</div>
+          <input
+            type="password"
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+            placeholder="ADMIN_API_SECRET"
+          />
+          <button type="button" className="primary" onClick={saveCreds}>
+            Sign in
+          </button>
         </div>
       </aside>
 
       <main className="main">
         {error && <div className="error">{error}</div>}
+        {okMsg && <div className="ok-box">{okMsg}</div>}
+
         {!meOk && (
-          <p className="muted">
-            Add your telegram id to <code>ADMIN_TELEGRAM_IDS</code> (e.g. 1001 for browser
-            mode), ensure API is running, then click Use.
-          </p>
+          <div className="panel">
+            <h2>Sign in</h2>
+            <p className="muted">
+              Open this page on desktop. Enter your Telegram user id (from{' '}
+              <code>@userinfobot</code>) and the <code>ADMIN_API_SECRET</code>{' '}
+              from Railway API settings. Your id must be listed in{' '}
+              <code>ADMIN_TELEGRAM_IDS</code>.
+            </p>
+          </div>
         )}
 
-        {meOk && tab === 'dashboard' && dash && (
-          <>
-            <div className="grid">
-              <div className="stat">
-                <div className="label">Users</div>
-                <div className="value">{n(dash.users as number, 0)}</div>
+        {meOk && tab === 'targets' && (
+          <div className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>Daily growth targets</h2>
+                <p className="muted">
+                  How much each fish should move over ~24 hours. Example:{' '}
+                  <code>15</code> ≈ +15%/day, <code>-8</code> ≈ −8%/day,{' '}
+                  <code>0</code> = only noise. Price engine drifts toward this
+                  gradually (not instantly).
+                </p>
               </div>
-              <div className="stat">
-                <div className="label">Active 24h</div>
-                <div className="value">{n(dash.activeUsers24h as number, 0)}</div>
-              </div>
-              <div className="stat">
-                <div className="label">Game credits</div>
-                <div className="value">{n(dash.totalGameCredits as string)}</div>
-              </div>
-              <div className="stat">
-                <div className="label">Trade volume</div>
-                <div className="value">{n(dash.tradingVolume as string)}</div>
-              </div>
-              <div className="stat">
-                <div className="label">Trades</div>
-                <div className="value">{n(dash.tradesCount as number, 0)}</div>
-              </div>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={saveAllTargets}
+              >
+                {busy ? 'Saving…' : 'Save all'}
+              </button>
             </div>
 
-            <div className="panel">
-              <h2>Top fish</h2>
-              {((dash.topFish as Fish[]) || []).map((f) => (
-                <div key={f.id} className="row">
-                  <div>{f.name}</div>
-                  <div className="mono">{f.symbol}</div>
-                  <div className="mono">{n(f.currentPrice ?? f.price)}</div>
-                  <div className="mono">{n(f.change ?? f.dailyChangePercent, 1)}%</div>
-                </div>
-              ))}
+            <div className="row header targets-grid">
+              <div>Fish</div>
+              <div>Price</div>
+              <div>24h now</div>
+              <div>Target % / day</div>
             </div>
+            {fish.map((f) => (
+              <div key={f.id} className="row targets-grid">
+                <div>
+                  <strong>{f.symbol}</strong>
+                  <div className="muted">{f.name}</div>
+                </div>
+                <div className="mono">{n(f.currentPrice)}</div>
+                <div className="mono">{n(f.dailyChangePercent, 1)}%</div>
+                <div>
+                  <input
+                    className="target-input"
+                    inputMode="decimal"
+                    value={targets[f.id] ?? '0'}
+                    onChange={(e) =>
+                      setTargets((prev) => ({
+                        ...prev,
+                        [f.id]: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            ))}
 
-            <div className="panel">
-              <h2>Top users</h2>
-              {((dash.topUsers as Array<Record<string, string>>) || []).map((u) => (
-                <div key={u.id} className="row">
-                  <div>
-                    #{u.rank} {u.displayName}
-                  </div>
-                  <div className="mono">{u.telegramId}</div>
-                  <div className="mono">{n(u.portfolioValue)}</div>
-                  <div />
-                </div>
-              ))}
+            <div className="toolbar" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const next: Record<string, string> = {};
+                  for (const f of fish) next[f.id] = '0';
+                  setTargets(next);
+                }}
+              >
+                Reset all to 0
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next: Record<string, string> = {};
+                  for (const f of fish) {
+                    const price = Number(f.currentPrice);
+                    // mild default ladder: cheap more volatile up-bias
+                    next[f.id] =
+                      price < 1 ? '12' : price < 50 ? '6' : price < 300 ? '3' : '1.5';
+                  }
+                  setTargets(next);
+                }}
+              >
+                Suggest mild uptrend
+              </button>
             </div>
-          </>
+          </div>
         )}
 
         {meOk && tab === 'fish' && (
           <div className="panel">
-            <h2>Fish controls</h2>
+            <h2>Instant price controls</h2>
+            <p className="muted">
+              One-shot bumps. For sustained moves use Daily growth.
+            </p>
             <div className="row header">
               <div>Name</div>
               <div>Price</div>
@@ -188,12 +274,12 @@ export default function App() {
                 <div>
                   {f.name}{' '}
                   <span className="muted mono">{f.symbol}</span>
-                  {f.isFrozen ? ' ❄️' : ''}
+                  {f.isFrozen ? ' · frozen' : ''}
                 </div>
                 <div className="mono">{n(f.currentPrice)}</div>
                 <div className="mono">{n(f.dailyChangePercent, 1)}%</div>
                 <div className="actions">
-                  {[10, 25, 50, -10, -25, -50].map((p) => (
+                  {[10, 25, -10, -25].map((p) => (
                     <button
                       key={p}
                       type="button"
@@ -229,29 +315,41 @@ export default function App() {
                 </div>
               </div>
             ))}
-            <div className="toolbar" style={{ marginTop: 14 }}>
-              <button
-                type="button"
-                className="primary"
-                onClick={async () => {
-                  const name = prompt('Event name', 'Whale bought the tank');
-                  if (!name) return;
-                  const mult = Number(prompt('Price multiplier', '1.25') || '1');
-                  const start = new Date().toISOString();
-                  const end = new Date(Date.now() + 3600_000).toISOString();
-                  await adminApi.createEvent({
-                    name,
-                    priceMultiplier: mult,
-                    startTime: start,
-                    endTime: end,
-                  });
-                  alert('Event created');
-                }}
-              >
-                Create market event
-              </button>
-            </div>
           </div>
+        )}
+
+        {meOk && tab === 'dashboard' && dash && (
+          <>
+            <div className="grid">
+              <div className="stat">
+                <div className="label">Users</div>
+                <div className="value">{n(dash.users as number, 0)}</div>
+              </div>
+              <div className="stat">
+                <div className="label">Active 24h</div>
+                <div className="value">{n(dash.activeUsers24h as number, 0)}</div>
+              </div>
+              <div className="stat">
+                <div className="label">Game credits</div>
+                <div className="value">{n(dash.totalGameCredits as string)}</div>
+              </div>
+              <div className="stat">
+                <div className="label">Trade volume</div>
+                <div className="value">{n(dash.tradingVolume as string)}</div>
+              </div>
+            </div>
+            <div className="panel">
+              <h2>Top fish</h2>
+              {((dash.topFish as Fish[]) || []).map((f) => (
+                <div key={f.id} className="row">
+                  <div>{f.name}</div>
+                  <div className="mono">{f.symbol}</div>
+                  <div className="mono">{n(f.currentPrice ?? f.price)}</div>
+                  <div className="mono">{n(f.change ?? f.dailyChangePercent, 1)}%</div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {meOk && tab === 'users' && (
@@ -301,42 +399,25 @@ export default function App() {
                 </div>
               ))}
             </div>
-
             {selectedUser && (
               <div className="panel">
                 <h2>
-                  User detail · {selectedUser.username || selectedUser.firstName}
+                  User · {selectedUser.username || selectedUser.firstName}
                 </h2>
-                <div className="toolbar">
-                  <button
-                    type="button"
-                    className="primary"
-                    onClick={async () => {
-                      const amount = Number(prompt('Adjust amount (+/-)', '50'));
-                      if (!Number.isFinite(amount) || amount === 0) return;
-                      const reason = prompt('Reason', 'admin top-up') || 'admin';
-                      setSelectedUser(
-                        await adminApi.adjustBalance(selectedUser.id, amount, reason),
-                      );
-                      setUsers(await adminApi.users(q || undefined));
-                    }}
-                  >
-                    Adjust balance
-                  </button>
-                </div>
-                <p className="muted">
-                  Balance: {n(selectedUser.gameBalance?.available)} · positions:{' '}
-                  {selectedUser.portfolioPositions?.length || 0}
-                </p>
-                <h2>Ledger</h2>
-                {(selectedUser.ledgerEntries || []).map((e, i) => (
-                  <div key={i} className="row">
-                    <div>{e.type}</div>
-                    <div className="mono">{n(e.amount)}</div>
-                    <div className="muted">{new Date(e.createdAt).toLocaleString()}</div>
-                    <div />
-                  </div>
-                ))}
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={async () => {
+                    const amount = Number(prompt('Adjust amount (+/-)', '50'));
+                    if (!Number.isFinite(amount) || amount === 0) return;
+                    const reason = prompt('Reason', 'admin top-up') || 'admin';
+                    setSelectedUser(
+                      await adminApi.adjustBalance(selectedUser.id, amount, reason),
+                    );
+                  }}
+                >
+                  Adjust balance
+                </button>
               </div>
             )}
           </>
@@ -370,19 +451,6 @@ export default function App() {
                       }}
                     >
                       Toggle
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const fee = Number(
-                          prompt('Fee percent', String(Number(p.feePercent))) ||
-                            p.feePercent,
-                        );
-                        await adminApi.patchPayment(p.code, { feePercent: fee });
-                        setPayments(await adminApi.paymentSettings());
-                      }}
-                    >
-                      Fee
                     </button>
                   </div>
                 </div>

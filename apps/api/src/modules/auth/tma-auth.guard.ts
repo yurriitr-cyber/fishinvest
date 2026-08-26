@@ -23,6 +23,36 @@ export class TmaAuthGuard implements CanActivate {
     }
 
     const botToken = this.config.get<string>('TELEGRAM_BOT_TOKEN');
+    const adminSecret = this.config.get<string>('ADMIN_API_SECRET');
+    const providedSecret =
+      (request.headers['x-admin-secret'] as string | undefined) || '';
+
+    // Desktop admin console: shared secret + telegram id allowlist
+    if (
+      adminSecret &&
+      adminSecret.length >= 8 &&
+      providedSecret &&
+      providedSecret === adminSecret
+    ) {
+      const tgRaw =
+        (request.headers['x-admin-telegram-id'] as string | undefined) ||
+        (request.headers['x-dev-telegram-id'] as string | undefined);
+      if (!tgRaw) {
+        throw new UnauthorizedException('Missing x-admin-telegram-id');
+      }
+      request[INIT_DATA_KEY] = {
+        authDate: new Date(),
+        hash: 'admin-secret',
+        signature: 'admin-secret',
+        user: {
+          id: Number(tgRaw),
+          firstName: 'Admin',
+          username: 'admin',
+        },
+      } as unknown as InitData;
+      return true;
+    }
+
     if (!botToken || botToken === 'your_bot_token_here') {
       // Dev bypass when no token configured
       if (process.env.NODE_ENV === 'development') {

@@ -28,10 +28,8 @@ function parseIntervalMs(value: string | undefined): number {
  */
 function tickStep(price: number, volatility: number): number {
   const vol = Math.max(0.01, volatility);
-  // Relative swing: vol 0.42 → ~3–6% ticks; vol 0.02 → ~0.1–0.3%
   const pct = vol * (0.06 + Math.random() * 0.08);
   const abs = price * pct;
-  // Floor so ultra-cheap fish still visibly jitter on chart
   const floor = price < 0.1 ? 0.0005 : price < 1 ? 0.002 : 0.01;
   return Math.max(floor, abs);
 }
@@ -40,6 +38,7 @@ function tickStep(price: number, volatility: number): number {
 export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PriceEngineService.name);
   private timer: NodeJS.Timeout | null = null;
+  private intervalMs = 3000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -47,12 +46,11 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    const intervalMs = parseIntervalMs(
+    this.intervalMs = parseIntervalMs(
       this.config.get<string>('PRICE_UPDATE_INTERVAL'),
     );
-    this.logger.log(`Price engine interval: ${intervalMs}ms`);
+    this.logger.log(`Price engine interval: ${this.intervalMs}ms`);
 
-    // First tick soon so charts have history
     setTimeout(() => {
       this.tick().catch((err) =>
         this.logger.error('Price tick failed', err?.stack || err),
@@ -63,7 +61,7 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
       this.tick().catch((err) =>
         this.logger.error('Price tick failed', err?.stack || err),
       );
-    }, intervalMs);
+    }, this.intervalMs);
   }
 
   onModuleDestroy() {
@@ -97,6 +95,7 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
       previousPrice: Prisma.Decimal;
       volatility: Prisma.Decimal;
       trend: Prisma.Decimal;
+      dailyTargetPercent: Prisma.Decimal;
       momentum: Prisma.Decimal;
       minPrice: Prisma.Decimal;
       maxPrice: Prisma.Decimal;
@@ -111,24 +110,39 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
     const trend = Number(fish.trend);
     const momentum = Number(fish.momentum);
     const vol = Number(fish.volatility);
+    const dailyTarget = Number(fish.dailyTargetPercent);
 
-    // Mean-reversion is weaker for high-vol (chaotic) fish
+    const ticksPerDay = Math.max(1, (24 * 60 * 60 * 1000) / this.intervalMs);
+    // Linear approx: +15%/day → each tick adds ~15%/ticksPerDay of price
+    const targetDrift = current * (dailyTarget / 100) / ticksPerDay;
+    const legacyDrift = current * trend * 0.0015;
+
+    // Mean-reversion fights sustained targets — soften when target is set
     const anchor = previous || current;
-    const pullStrength = Math.max(0.04, 0.22 - vol * 0.35);
+    const pullStrength =
+      Math.abs(dailyTarget) >= 0.5
+        ? 0.04
+        : Math.max(0.04, 0.22 - vol * 0.35);
     const pull = (anchor - current) * pullStrength;
-    const drift = current * trend * 0.0015;
     const step = tickStep(current, vol);
-    const noise = (Math.random() * 2 - 1) * step;
+    // When admin set a daily path, damp noise so the path stays readable
+    const noiseScale = Math.abs(dailyTarget) >= 0.5 ? 0.35 : 1;
+    const noise = (Math.random() * 2 - 1) * step * noiseScale;
 
-    let delta = pull + drift + noise + momentum * current * 0.04;
+    let delta =
+      pull + targetDrift + legacyDrift + noise + momentum * current * 0.04;
 
     if (eventMultiplier) {
       delta += current * (Number(eventMultiplier) - 1) * 0.03;
     }
 
-    // Cap: high vol can move more %; mythic stays tight
     const maxPct = Math.min(0.12, Math.max(0.008, vol * 0.25));
-    const maxAbs = Math.max(step * 1.5, current * maxPct);
+    // Allow a bit more room when following a strong daily target
+    const targetRoom =
+      Math.abs(dailyTarget) >= 0.5
+        ? Math.abs(targetDrift) * 3 + current * 0.002
+        : 0;
+    const maxAbs = Math.max(step * 1.5, current * maxPct, targetRoom);
     delta = Math.max(-maxAbs, Math.min(maxAbs, delta));
 
     let newPrice = current + delta;

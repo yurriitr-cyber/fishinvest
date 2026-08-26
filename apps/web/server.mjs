@@ -55,7 +55,15 @@ function serveStatic(req, res) {
     sendFile(res, candidate);
     return;
   }
-  // SPA fallback
+  // Admin SPA fallback (assets may 404 into /admin/index.html)
+  if (urlPath === '/admin' || urlPath === '/admin/' || urlPath.startsWith('/admin/')) {
+    const adminIndex = join(distDir, 'admin', 'index.html');
+    if (existsSync(adminIndex)) {
+      sendFile(res, adminIndex);
+      return;
+    }
+  }
+  // Mini App SPA fallback
   const index = join(distDir, 'index.html');
   if (existsSync(index)) {
     sendFile(res, index);
@@ -102,8 +110,15 @@ function proxyApi(req, res) {
 }
 
 const server = http.createServer((req, res) => {
-  if ((req.url || '').startsWith('/api')) {
+  const url = req.url || '/';
+  if (url.startsWith('/api')) {
     proxyApi(req, res);
+    return;
+  }
+  // Admin SPA lives under /admin/
+  if (url === '/admin' || url.startsWith('/admin?')) {
+    res.writeHead(302, { Location: '/admin/' });
+    res.end();
     return;
   }
   serveStatic(req, res);

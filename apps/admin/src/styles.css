@@ -88,7 +88,38 @@ input, select {
   padding: 14px;
   margin-bottom: 16px;
 }
-.panel h2 { margin: 0 0 12px; font-size: 1rem; }
+.panel h2 { margin: 0 0 8px; font-size: 1rem; }
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.panel-head .muted { margin: 0; max-width: 52ch; line-height: 1.45; }
+.targets-grid {
+  grid-template-columns: 1.4fr 0.7fr 0.6fr 0.9fr;
+}
+.target-input {
+  width: 100%;
+  max-width: 110px;
+  font-family: var(--mono);
+}
+.creds {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.creds input { width: 100%; }
+.ok-box {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(45, 212, 168, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(45, 212, 168, 0.35);
+}
 .row {
   display: grid;
   grid-template-columns: 1.2fr 0.7fr 0.7fr 1.4fr;
@@ -109,4 +140,5 @@ input, select {
   .layout { grid-template-columns: 1fr; }
   .side { border-right: none; border-bottom: 1px solid var(--line); }
   .side nav { flex-direction: row; flex-wrap: wrap; }
+  .targets-grid { grid-template-columns: 1fr 1fr; }
 }
