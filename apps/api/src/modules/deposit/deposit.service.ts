@@ -32,7 +32,7 @@ export class DepositService {
     const labels: Record<string, { label: string; note: string }> = {
       TELEGRAM_STARS: {
         label: '⭐ Telegram Stars',
-        note: 'Pay real Stars → configurable game credits',
+        note: '1 Telegram Star = 1 game credit',
       },
       TON: {
         label: '💎 TON',
@@ -63,7 +63,7 @@ export class DepositService {
     });
   }
 
-  /** Configurable REAL Stars → GAME CREDITS conversion (not 1:1 by default). */
+  /** REAL Telegram Stars → GAME CREDITS (default 1:1). */
   async getStarsToGameCreditRate(): Promise<Prisma.Decimal> {
     const envRate = this.config.get<string>('STARS_TO_GAME_CREDIT_RATE');
     if (envRate) return new Prisma.Decimal(envRate);
@@ -79,12 +79,19 @@ export class DepositService {
 
     if (row) return row.rate;
 
-    // Fallback to seeded STARS_EQUIVALENT rate
     const legacy = await this.prisma.db.exchangeRate.findFirst({
       where: { fromAsset: 'STARS_EQUIVALENT', toAsset: 'GAME_CREDIT' },
       orderBy: { effectiveFrom: 'desc' },
     });
-    return legacy?.rate ?? new Prisma.Decimal(10);
+    return legacy?.rate ?? new Prisma.Decimal(1);
+  }
+
+  async getStarsFeePercent(providerFee: Prisma.Decimal): Promise<Prisma.Decimal> {
+    const envFee = this.config.get<string>('STARS_DEPOSIT_FEE_PERCENT');
+    if (envFee !== undefined && envFee !== '') {
+      return new Prisma.Decimal(envFee);
+    }
+    return providerFee;
   }
 
   async quoteStars(starAmount: number) {
@@ -96,7 +103,7 @@ export class DepositService {
     const rate = await this.getStarsToGameCreditRate();
     const assetAmount = new Prisma.Decimal(starAmount);
     const gross = assetAmount.mul(rate);
-    const feePercent = provider.feePercent;
+    const feePercent = await this.getStarsFeePercent(provider.feePercent);
     const feeAmount = gross.mul(feePercent).div(100);
     const net = gross.sub(feeAmount);
 
@@ -106,8 +113,7 @@ export class DepositService {
       assetAmount: assetAmount.toFixed(0),
       exchangeRate: rate.toFixed(8),
       rateSource: 'config_exchange_rate',
-      rateNote:
-        'Configurable conversion REAL_TELEGRAM_STAR → GAME_CREDIT. Not an official Telegram USD oracle.',
+      rateNote: '1 Telegram Star = 1 game credit (configurable).',
       feePercent: feePercent.toFixed(4),
       grossGameCredits: gross.toFixed(4),
       feeAmount: feeAmount.toFixed(4),
@@ -158,7 +164,10 @@ export class DepositService {
     const invoiceLink = await this.createInvoiceLink({
       botToken,
       title: 'Rare Fish game credits',
-      description: `${quote.gameCreditAmount} game credits (after ${quote.feePercent}% fee)`,
+      description:
+        Number(quote.feePercent) > 0
+          ? `${quote.gameCreditAmount} game credits (after ${quote.feePercent}% fee)`
+          : `${quote.gameCreditAmount} game credits (1★ = 1 credit)`,
       payload: deposit.id,
       starAmount,
     });

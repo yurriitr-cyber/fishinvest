@@ -41,10 +41,10 @@ async function main() {
   }
 
   const providers = [
-    { code: 'TELEGRAM_STARS' as const, isEnabled: true, feePercent: 3 },
-    { code: 'TON' as const, isEnabled: false, feePercent: 3 },
-    { code: 'TELEGRAM_GIFT' as const, isEnabled: false, feePercent: 5 },
-    { code: 'CRYPTO' as const, isEnabled: false, feePercent: 3 },
+    { code: 'TELEGRAM_STARS' as const, isEnabled: true, feePercent: 0 },
+    { code: 'TON' as const, isEnabled: false, feePercent: 0 },
+    { code: 'TELEGRAM_GIFT' as const, isEnabled: false, feePercent: 0 },
+    { code: 'CRYPTO' as const, isEnabled: false, feePercent: 0 },
   ];
 
   for (const p of providers) {
@@ -57,24 +57,24 @@ async function main() {
 
   await prisma.exchangeRate.upsert({
     where: { id: '00000000-0000-4000-8000-000000000001' },
-    update: { rate: 10 },
+    update: { rate: 1 },
     create: {
       id: '00000000-0000-4000-8000-000000000001',
       fromAsset: 'STARS_EQUIVALENT',
       toAsset: 'GAME_CREDIT',
-      rate: 10,
+      rate: 1,
       effectiveFrom: new Date(),
     },
   });
 
   await prisma.exchangeRate.upsert({
     where: { id: '00000000-0000-4000-8000-000000000002' },
-    update: { rate: 10 },
+    update: { rate: 1 },
     create: {
       id: '00000000-0000-4000-8000-000000000002',
       fromAsset: 'REAL_TELEGRAM_STAR',
       toAsset: 'GAME_CREDIT',
-      rate: 10,
+      rate: 1,
       effectiveFrom: new Date(),
     },
   });

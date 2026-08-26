@@ -134,7 +134,9 @@ export function Deposit({
               <div className="title">{m.label}</div>
               <div className="note">
                 {m.note}
-                {m.enabled ? ` · fee ${m.feePercent}%` : ''}
+                {m.enabled && Number(m.feePercent) > 0
+                  ? ` · fee ${m.feePercent}%`
+                  : ''}
               </div>
             </div>
             <span className={`badge ${m.enabled ? '' : 'off'}`}>
@@ -164,20 +166,24 @@ export function Deposit({
             <div className="summary">
               <div className="summary-item">
                 <div className="label">Rate</div>
-                <div className="value">
-                  1 Star → {formatStars(quote.exchangeRate, 0)} credits
-                </div>
+                <div className="value">1★ → 1 game ⭐</div>
               </div>
-              <div className="summary-item">
-                <div className="label">Gross</div>
-                <div className="value">
-                  ⭐ {formatStars(quote.grossGameCredits)}
-                </div>
-              </div>
-              <div className="summary-item">
-                <div className="label">Fee ({quote.feePercent}%)</div>
-                <div className="value">⭐ {formatStars(quote.feeAmount)}</div>
-              </div>
+              {Number(quote.feePercent) > 0 && (
+                <>
+                  <div className="summary-item">
+                    <div className="label">Gross</div>
+                    <div className="value">
+                      ⭐ {formatStars(quote.grossGameCredits)}
+                    </div>
+                  </div>
+                  <div className="summary-item">
+                    <div className="label">Fee ({quote.feePercent}%)</div>
+                    <div className="value">
+                      ⭐ {formatStars(quote.feeAmount)}
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="summary-item">
                 <div className="label">You receive</div>
                 <div className="value">
