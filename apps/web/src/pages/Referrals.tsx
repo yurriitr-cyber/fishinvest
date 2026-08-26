@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { MediaSlot } from '../components/MediaSlot';
 import { api, type Me, type ReferralStats } from '../lib/api';
 import { formatStars } from '../lib/format';
+import { hapticImpact } from '../lib/telegram';
 
 export function Referrals({
   me,
@@ -23,10 +24,21 @@ export function Referrals({
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(me.referralLink);
+      void hapticImpact('light');
       notify('Invite link copied');
     } catch {
       notify(me.referralLink);
     }
+  }
+
+  function shareLink() {
+    const text = encodeURIComponent(
+      'Join me on Rare Fish — we both get bonus credits.',
+    );
+    const url = encodeURIComponent(me.referralLink);
+    const shareUrl = `https://t.me/share/url?url=${url}&text=${text}`;
+    void hapticImpact('light');
+    window.open(shareUrl, '_blank', 'noopener,noreferrer');
   }
 
   return (
@@ -52,9 +64,43 @@ export function Referrals({
         </div>
       </div>
 
-      <button className="btn btn-solid" type="button" onClick={copyLink}>
-        Copy invite link
-      </button>
+      <div className="trade-panel" style={{ marginBottom: 14 }}>
+        <div className="eyebrow">Your link</div>
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: '0.82rem',
+            wordBreak: 'break-all',
+            color: 'var(--text-muted)',
+            lineHeight: 1.4,
+          }}
+        >
+          {me.referralLink}
+        </div>
+        <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+          Friend opens the link → taps Open in the bot → both bonuses land.
+          Your own link never pays out to you.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+        <button
+          className="btn btn-solid"
+          type="button"
+          style={{ flex: 1 }}
+          onClick={shareLink}
+        >
+          Share in Telegram
+        </button>
+        <button
+          className="btn"
+          type="button"
+          style={{ flex: 1 }}
+          onClick={copyLink}
+        >
+          Copy link
+        </button>
+      </div>
 
       {error && <div className="error-box">{error}</div>}
 

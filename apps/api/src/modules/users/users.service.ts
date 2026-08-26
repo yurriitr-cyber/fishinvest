@@ -33,6 +33,8 @@ export interface MeResponse {
   referredBy: string | null;
 }
 
+type Tx = Prisma.TransactionClient;
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -55,6 +57,7 @@ export class UsersService {
       this.config.get<string>('ADMIN_TELEGRAM_IDS'),
     );
     const shouldBeAdmin = adminIds.includes(String(tgUser.id));
+    const resolvedStart = startParam ?? initData.startParam ?? null;
 
     let existing = await this.prisma.db.user.findUnique({
       where: { telegramId },
@@ -75,36 +78,23 @@ export class UsersService {
         },
       });
 
+      // Friend opened the invite after already creating an account — still
+      // attach the referrer once, as long as they were never referred before.
+      if (!existing.referredById && resolvedStart) {
+        await this.tryAttachReferral(existing, telegramId, resolvedStart);
+      }
+
       const me = await this.buildMeResponse(existing.id, false);
       return { user: existing, me, isNewUser: false };
     }
 
-    const refCode = parseReferralCode(startParam ?? initData.startParam);
-    let referrer: User | null = null;
-
-    if (refCode) {
-      referrer = await this.prisma.db.user.findUnique({
-        where: { referralCode: refCode },
-      });
-      if (referrer && referrer.telegramId === telegramId) {
-        referrer = null; // self-referral blocked
-      }
-    }
-
+    const referrer = await this.findReferrer(resolvedStart, telegramId);
     const initialBonus = Number(
       this.config.get('INITIAL_BONUS_AMOUNT') ?? DEFAULT_INITIAL_BONUS,
     );
-    const referralJoinBonus = Number(
-      this.config.get('REFERRAL_JOIN_BONUS_AMOUNT') ?? DEFAULT_REFERRAL_JOIN_BONUS,
-    );
-    const referralBonus = Number(
-      this.config.get('REFERRAL_BONUS_AMOUNT') ?? DEFAULT_REFERRAL_BONUS,
-    );
-    const referralEnabled = this.config.get<string>('REFERRAL_ENABLED') !== 'false';
 
     const user = await this.prisma.db.$transaction(async (tx) => {
       let referralCode = generateReferralCode();
-      // Ensure unique referral code
       while (await tx.user.findUnique({ where: { referralCode } })) {
         referralCode = generateReferralCode();
       }
@@ -126,7 +116,6 @@ export class UsersService {
         },
       });
 
-      // Initial bonus +200
       await this.ledger.creditInTransaction(tx, {
         userId: newUser.id,
         type: 'INITIAL_BONUS',
@@ -137,60 +126,12 @@ export class UsersService {
         metadata: { source: 'registration' },
       });
 
-      let joinLedgerId: string | undefined;
-
-      // Referral join bonus +50 for referred user
-      if (referrer && referralEnabled) {
-        try {
-          const joinLedger = await this.ledger.creditInTransaction(tx, {
-            userId: newUser.id,
-            type: 'REFERRAL_JOIN_BONUS',
-            amount: referralJoinBonus,
-            idempotencyKey: `referral:join:${newUser.id}`,
-            referenceType: 'referral',
-            referenceId: newUser.id,
-            metadata: { referrerId: referrer.id, referralCode: refCode },
-          });
-          joinLedgerId = joinLedger.id;
-        } catch (e) {
-          if (!(e instanceof ConflictException)) throw e;
-        }
-
-        // Create referral record + referrer bonus +300
-        try {
-          const referral = await tx.referral.create({
-            data: {
-              referrerId: referrer.id,
-              referredId: newUser.id,
-              referralCode: refCode!,
-              referrerBonusAmount: referralBonus,
-              referredJoinBonusAmount: referralJoinBonus,
-              status: 'COMPLETED',
-              referredJoinLedgerId: joinLedgerId,
-            },
-          });
-
-          const referrerLedger = await this.ledger.creditInTransaction(tx, {
-            userId: referrer.id,
-            type: 'REFERRAL_BONUS',
-            amount: referralBonus,
-            idempotencyKey: `referral:bonus:${newUser.id}`,
-            referenceType: 'referral',
-            referenceId: referral.id,
-            metadata: { referredUserId: newUser.id },
-          });
-
-          await tx.referral.update({
-            where: { id: referral.id },
-            data: { referrerLedgerId: referrerLedger.id },
-          });
-        } catch (e) {
-          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-            // duplicate referral — skip
-          } else {
-            throw e;
-          }
-        }
+      if (referrer) {
+        await this.creditReferralPair(tx, {
+          referrer,
+          referred: newUser,
+          referralCode: referrer.referralCode,
+        });
       }
 
       await tx.user.update({
@@ -203,6 +144,139 @@ export class UsersService {
 
     const me = await this.buildMeResponse(user.id, true);
     return { user, me, isNewUser: true };
+  }
+
+  private async findReferrer(
+    startParam: string | null | undefined,
+    inviteeTelegramId: bigint,
+  ): Promise<User | null> {
+    const refCode = parseReferralCode(startParam);
+    if (!refCode) return null;
+
+    const referrer = await this.prisma.db.user.findUnique({
+      where: { referralCode: refCode },
+    });
+    if (!referrer) return null;
+    if (referrer.telegramId === inviteeTelegramId) return null; // self-referral
+    return referrer;
+  }
+
+  /**
+   * Late binding for users who opened the app once without the invite, then
+   * came back through a friend's link. Idempotent — only runs if referredById
+   * is still null and no Referral row exists.
+   */
+  private async tryAttachReferral(
+    user: User,
+    telegramId: bigint,
+    startParam: string,
+  ): Promise<boolean> {
+    if (this.config.get<string>('REFERRAL_ENABLED') === 'false') return false;
+
+    const referrer = await this.findReferrer(startParam, telegramId);
+    if (!referrer) return false;
+
+    const already = await this.prisma.db.referral.findUnique({
+      where: { referredId: user.id },
+    });
+    if (already) return false;
+
+    try {
+      await this.prisma.db.$transaction(async (tx) => {
+        const claimed = await tx.user.updateMany({
+          where: { id: user.id, referredById: null },
+          data: { referredById: referrer.id, referredAt: new Date() },
+        });
+        if (claimed.count === 0) return;
+
+        await this.creditReferralPair(tx, {
+          referrer,
+          referred: user,
+          referralCode: referrer.referralCode,
+        });
+      });
+      return true;
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return false;
+      }
+      throw e;
+    }
+  }
+
+  private async creditReferralPair(
+    tx: Tx,
+    args: { referrer: User; referred: User; referralCode: string },
+  ) {
+    if (this.config.get<string>('REFERRAL_ENABLED') === 'false') return;
+
+    const referralJoinBonus = Number(
+      this.config.get('REFERRAL_JOIN_BONUS_AMOUNT') ?? DEFAULT_REFERRAL_JOIN_BONUS,
+    );
+    const referralBonus = Number(
+      this.config.get('REFERRAL_BONUS_AMOUNT') ?? DEFAULT_REFERRAL_BONUS,
+    );
+
+    let joinLedgerId: string | undefined;
+    try {
+      const joinLedger = await this.ledger.creditInTransaction(tx, {
+        userId: args.referred.id,
+        type: 'REFERRAL_JOIN_BONUS',
+        amount: referralJoinBonus,
+        idempotencyKey: `referral:join:${args.referred.id}`,
+        referenceType: 'referral',
+        referenceId: args.referred.id,
+        metadata: {
+          referrerId: args.referrer.id,
+          referralCode: args.referralCode,
+        },
+      });
+      joinLedgerId = joinLedger.id;
+    } catch (e) {
+      if (!(e instanceof ConflictException)) throw e;
+    }
+
+    try {
+      const referral = await tx.referral.create({
+        data: {
+          referrerId: args.referrer.id,
+          referredId: args.referred.id,
+          referralCode: args.referralCode,
+          referrerBonusAmount: referralBonus,
+          referredJoinBonusAmount: referralJoinBonus,
+          status: 'COMPLETED',
+          referredJoinLedgerId: joinLedgerId,
+        },
+      });
+
+      const referrerLedger = await this.ledger.creditInTransaction(tx, {
+        userId: args.referrer.id,
+        type: 'REFERRAL_BONUS',
+        amount: referralBonus,
+        idempotencyKey: `referral:bonus:${args.referred.id}`,
+        referenceType: 'referral',
+        referenceId: referral.id,
+        metadata: { referredUserId: args.referred.id },
+      });
+
+      await tx.referral.update({
+        where: { id: referral.id },
+        data: { referrerLedgerId: referrerLedger.id },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return;
+      }
+      throw e;
+    }
+  }
+
+  /** Bot deep-link — always lands on /start with the payload; short-name apps are optional. */
+  private buildReferralLink(referralCode: string): string {
+    const botUsername =
+      this.config.get<string>('TELEGRAM_BOT_USERNAME')?.replace(/^@/, '') ??
+      'rarefishinvestment_bot';
+    return `https://t.me/${botUsername}?start=ref_${referralCode}`;
   }
 
   async buildMeResponse(
@@ -218,11 +292,6 @@ export class UsersService {
     });
 
     const balance = user.gameBalance?.available ?? new Prisma.Decimal(0);
-    const botUsername =
-      this.config.get<string>('TELEGRAM_BOT_USERNAME')?.replace(/^@/, '') ??
-      'rarefishinvestment_bot';
-    const miniAppName =
-      this.config.get<string>('TELEGRAM_MINI_APP_NAME') ?? 'app';
 
     const [joinBonusEntry, positions] = await Promise.all([
       this.prisma.db.gameBalanceLedger.findUnique({
@@ -246,7 +315,7 @@ export class UsersService {
       firstName: user.firstName,
       balance: balance.toFixed(4),
       referralCode: user.referralCode,
-      referralLink: `https://t.me/${botUsername}/${miniAppName}?startapp=ref_${user.referralCode}`,
+      referralLink: this.buildReferralLink(user.referralCode),
       isNewUser,
       isAdmin: user.isAdmin,
       welcomeBonus: Number(

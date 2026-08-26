@@ -19,7 +19,6 @@ for (const envPath of envCandidates) {
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const webAppUrl = process.env.WEBAPP_URL || 'http://localhost:5180';
-const miniAppName = process.env.TELEGRAM_MINI_APP_NAME || 'app';
 /** Filled from Telegram getMe on start — do not trust a wrong env username. */
 let botUsername =
   process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/, '') || 'rarefishinvestment_bot';
@@ -40,6 +39,9 @@ if (!internalSecret) {
 const bot = new Bot(token);
 
 function openAppKeyboard(startParam?: string) {
+  // Always open the hosted Mini App URL. Telegram keeps the query string, and
+  // our frontend also reads tgWebAppStartParam / startapp into x-start-param.
+  // Direct t.me/<bot>/<short> links fail when the BotFather short name is wrong.
   const url = startParam
     ? `${webAppUrl}${webAppUrl.includes('?') ? '&' : '?'}tgWebAppStartParam=${encodeURIComponent(startParam)}`
     : webAppUrl;
@@ -48,10 +50,11 @@ function openAppKeyboard(startParam?: string) {
     return new InlineKeyboard().webApp('🐟 Open Rare Fish Market', url);
   }
 
-  // Fallback only when WEBAPP_URL is not https — uses this bot's real username
   return new InlineKeyboard().url(
     '🐟 Open Mini App (set WEBAPP_URL to https)',
-    `https://t.me/${botUsername}/${miniAppName}`,
+    startParam
+      ? `https://t.me/${botUsername}?start=${encodeURIComponent(startParam)}`
+      : `https://t.me/${botUsername}`,
   );
 }
 
@@ -80,16 +83,24 @@ bot.command('start', async (ctx) => {
         : `ref_${payload}`
       : undefined;
 
+  const isInvite = Boolean(startParam?.startsWith('ref_'));
+
   await ctx.reply(
     [
       '*Rare Fish Investment*',
       '',
-      'A simulated aquarium market.',
-      'You get *200 game ⭐* to start.',
-      'Invite a friend: they get *+50*, you get *+300*.',
+      isInvite
+        ? 'You were invited — tap below to claim your *+50 CR* join bonus.'
+        : 'A simulated aquarium market.',
+      isInvite
+        ? 'Your friend gets *+300 CR* when you open the app.'
+        : 'You get *200 game ⭐* to start.',
+      isInvite ? '' : 'Invite a friend: they get *+50*, you get *+300*.',
       '',
       '_Game credits are not real Telegram Stars._',
-    ].join('\n'),
+    ]
+      .filter((line) => line !== undefined)
+      .join('\n'),
     {
       parse_mode: 'Markdown',
       reply_markup: openAppKeyboard(startParam),

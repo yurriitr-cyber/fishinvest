@@ -2,13 +2,54 @@ import { configureAuth } from './api';
 
 type LaunchParamsLike = {
   initDataRaw?: string;
+  /** Top-level start param from tgWebAppStartParam — often set when initData.startParam is empty. */
+  startParam?: string;
   initData?: { startParam?: string };
 };
 
+const START_PARAM_STORAGE_KEY = 'rf_start_param';
+
+function readStartParamFromLocation(): string | undefined {
+  const query = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  return (
+    query.get('tgWebAppStartParam') ||
+    query.get('startapp') ||
+    query.get('start_param') ||
+    query.get('start') ||
+    hash.get('tgWebAppStartParam') ||
+    hash.get('startapp') ||
+    hash.get('start_param') ||
+    undefined
+  );
+}
+
+function resolveStartParam(lp?: LaunchParamsLike): string | undefined {
+  const fromLaunch =
+    lp?.startParam ||
+    lp?.initData?.startParam ||
+    readStartParamFromLocation() ||
+    undefined;
+
+  if (fromLaunch) {
+    try {
+      sessionStorage.setItem(START_PARAM_STORAGE_KEY, fromLaunch);
+    } catch {
+      /* private mode */
+    }
+    return fromLaunch;
+  }
+
+  try {
+    return sessionStorage.getItem(START_PARAM_STORAGE_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function bootstrapTelegram() {
   const params = new URLSearchParams(window.location.search);
-  const startFromUrl =
-    params.get('tgWebAppStartParam') || params.get('startapp') || undefined;
+  const startFromUrl = resolveStartParam();
   const devId =
     params.get('devUser') || localStorage.getItem('rf_dev_tg_id') || '1001';
 
@@ -29,7 +70,7 @@ export async function bootstrapTelegram() {
       configureAuth({
         mode: 'tma',
         raw: lp.initDataRaw,
-        startParam: lp.initData?.startParam || startFromUrl,
+        startParam: resolveStartParam(lp),
       });
       return;
     }
