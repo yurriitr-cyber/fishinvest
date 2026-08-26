@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@rare-fish/db';
@@ -13,13 +14,31 @@ import { PrismaService } from '../prisma/prisma.service';
 const STAR_PACKS = [50, 100, 250, 500, 1000] as const;
 
 @Injectable()
-export class DepositService {
+export class DepositService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly config: ConfigService,
   ) {}
 
+  async onModuleInit() {
+    // Keep DB in sync with env so admin/UI never show stale 10x / 3% values.
+    const rate = await this.getStarsToGameCreditRate();
+    const fee = await this.getStarsFeePercent(new Prisma.Decimal(0));
+
+    await this.prisma.db.paymentProviderConfig.updateMany({
+      where: { code: 'TELEGRAM_STARS' },
+      data: { feePercent: fee },
+    });
+
+    await this.prisma.db.exchangeRate.updateMany({
+      where: {
+        fromAsset: { in: ['REAL_TELEGRAM_STAR', 'STARS_EQUIVALENT'] },
+        toAsset: 'GAME_CREDIT',
+      },
+      data: { rate },
+    });
+  }
   listStarPacks() {
     return [...STAR_PACKS];
   }
@@ -28,6 +47,7 @@ export class DepositService {
     const providers = await this.prisma.db.paymentProviderConfig.findMany({
       orderBy: { code: 'asc' },
     });
+    const starsFee = await this.getStarsFeePercent(new Prisma.Decimal(0));
 
     const labels: Record<string, { label: string; note: string }> = {
       TELEGRAM_STARS: {
@@ -50,11 +70,13 @@ export class DepositService {
 
     return providers.map((p) => {
       const meta = labels[p.code] || { label: p.code, note: 'Payment provider' };
+      const fee =
+        p.code === 'TELEGRAM_STARS' ? starsFee : p.feePercent;
       return {
         code: p.code,
         label: meta.label,
         enabled: p.isEnabled,
-        feePercent: p.feePercent.toFixed(2),
+        feePercent: fee.toFixed(2),
         note: p.isEnabled
           ? meta.note
           : 'Provider scaffolded — not enabled yet',
