@@ -91,6 +91,20 @@ export default function App() {
     })();
   }, [tab, meOk]);
 
+  // Live ramp progress while on 24h tab
+  useEffect(() => {
+    if (!meOk || tab !== 'targets') return;
+    const id = setInterval(async () => {
+      try {
+        const list = await adminApi.fish();
+        setFish(list);
+      } catch {
+        /* ignore */
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [meOk, tab]);
+
   async function saveAllTargets() {
     setBusy(true);
     setError(null);
@@ -100,14 +114,30 @@ export default function App() {
         fishId: f.id,
         percent: Number(targets[f.id] ?? 0),
       }));
-      const res = await adminApi.setDailyTargets(payload);
-      setOkMsg(`Saved daily targets for ${res.updated} fish`);
-      setFish(await adminApi.fish());
+      const res = await adminApi.setDailyTargets(payload, 24);
+      setOkMsg(
+        `Ramp started: ${res.updated} fish will reach target over ${res.durationHours}h (not instantly)`,
+      );
+      const list = await adminApi.fish();
+      setFish(list);
+      const next: Record<string, string> = {};
+      for (const f of list) {
+        next[f.id] = String(Number(f.dailyTargetPercent ?? 0));
+      }
+      setTargets(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
       setBusy(false);
     }
+  }
+
+  function bumpTarget(id: string, delta: number) {
+    setTargets((prev) => {
+      const cur = Number(prev[id] ?? 0);
+      const next = Math.round((cur + delta) * 10) / 10;
+      return { ...prev, [id]: String(Math.max(-90, Math.min(500, next))) };
+    });
   }
 
   return (
@@ -120,8 +150,8 @@ export default function App() {
         <nav>
           {(
             [
-              ['targets', 'Daily growth'],
-              ['fish', 'Prices'],
+              ['targets', '24h ramp'],
+              ['fish', 'Override'],
               ['dashboard', 'Dashboard'],
               ['users', 'Users'],
               ['payments', 'Payments'],
@@ -188,12 +218,12 @@ export default function App() {
           <div className="panel">
             <div className="panel-head">
               <div>
-                <h2>Daily growth targets</h2>
+                <h2>24h price ramp</h2>
                 <p className="muted">
-                  How much each fish should move over ~24 hours. Example:{' '}
-                  <code>15</code> ≈ +15%/day, <code>-8</code> ≈ −8%/day,{' '}
-                  <code>0</code> = only noise. Price engine drifts toward this
-                  gradually (not instantly).
+                  Set +% / −% with the steppers. After <strong>Start 24h ramp</strong>,
+                  price moves smoothly to that target over 24 hours — it does{' '}
+                  <strong>not</strong> jump immediately. Example: +10 on a fish at
+                  100 → ~110 in 24h.
                 </p>
               </div>
               <button
@@ -202,39 +232,83 @@ export default function App() {
                 disabled={busy}
                 onClick={saveAllTargets}
               >
-                {busy ? 'Saving…' : 'Save all'}
+                {busy ? 'Starting…' : 'Start 24h ramp'}
               </button>
             </div>
 
             <div className="row header targets-grid">
               <div>Fish</div>
-              <div>Price</div>
-              <div>24h now</div>
-              <div>Target % / day</div>
+              <div>Now → target</div>
+              <div>Ramp</div>
+              <div>% / 24h</div>
             </div>
-            {fish.map((f) => (
-              <div key={f.id} className="row targets-grid">
-                <div>
-                  <strong>{f.symbol}</strong>
-                  <div className="muted">{f.name}</div>
+            {fish.map((f) => {
+              const pct = Number(targets[f.id] ?? 0);
+              const price = Number(f.currentPrice);
+              const preview =
+                Number.isFinite(price) && Number.isFinite(pct)
+                  ? price * (1 + pct / 100)
+                  : null;
+              const active =
+                f.rampEndAt && new Date(f.rampEndAt).getTime() > Date.now();
+              return (
+                <div key={f.id} className="row targets-grid">
+                  <div>
+                    <strong>{f.symbol}</strong>
+                    <div className="muted">{f.name}</div>
+                  </div>
+                  <div className="mono">
+                    {n(f.currentPrice, 2)}
+                    {preview != null && pct !== 0 ? (
+                      <>
+                        {' → '}
+                        <span className="ok">{n(preview, 2)}</span>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {active && f.rampToPrice != null ? (
+                      <>
+                        live → {n(f.rampToPrice, 2)}
+                        {f.rampProgress != null
+                          ? ` · ${Math.round(f.rampProgress * 100)}%`
+                          : ''}
+                      </>
+                    ) : (
+                      'idle'
+                    )}
+                  </div>
+                  <div className="stepper">
+                    <button type="button" onClick={() => bumpTarget(f.id, -5)}>
+                      −5
+                    </button>
+                    <button type="button" onClick={() => bumpTarget(f.id, -1)}>
+                      −
+                    </button>
+                    <input
+                      className="target-input"
+                      inputMode="decimal"
+                      value={targets[f.id] ?? '0'}
+                      onChange={(e) =>
+                        setTargets((prev) => ({
+                          ...prev,
+                          [f.id]: e.target.value,
+                        }))
+                      }
+                    />
+                    <button type="button" onClick={() => bumpTarget(f.id, 1)}>
+                      +
+                    </button>
+                    <button type="button" onClick={() => bumpTarget(f.id, 5)}>
+                      +5
+                    </button>
+                    <button type="button" onClick={() => bumpTarget(f.id, 10)}>
+                      +10
+                    </button>
+                  </div>
                 </div>
-                <div className="mono">{n(f.currentPrice)}</div>
-                <div className="mono">{n(f.dailyChangePercent, 1)}%</div>
-                <div>
-                  <input
-                    className="target-input"
-                    inputMode="decimal"
-                    value={targets[f.id] ?? '0'}
-                    onChange={(e) =>
-                      setTargets((prev) => ({
-                        ...prev,
-                        [f.id]: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div className="toolbar" style={{ marginTop: 16 }}>
               <button
@@ -245,22 +319,7 @@ export default function App() {
                   setTargets(next);
                 }}
               >
-                Reset all to 0
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const next: Record<string, string> = {};
-                  for (const f of fish) {
-                    const price = Number(f.currentPrice);
-                    // mild default ladder: cheap more volatile up-bias
-                    next[f.id] =
-                      price < 1 ? '12' : price < 50 ? '6' : price < 300 ? '3' : '1.5';
-                  }
-                  setTargets(next);
-                }}
-              >
-                Suggest mild uptrend
+                All 0 (cancel ramps on save)
               </button>
             </div>
           </div>
@@ -268,9 +327,10 @@ export default function App() {
 
         {meOk && tab === 'fish' && (
           <div className="panel">
-            <h2>Instant price controls</h2>
+            <h2>Manual override</h2>
             <p className="muted">
-              One-shot bumps. For sustained moves use Daily growth.
+              Freeze trading or set an exact price. For +10% over a day use{' '}
+              <strong>24h price ramp</strong> — not this tab.
             </p>
             <div className="row header">
               <div>Name</div>
@@ -288,18 +348,6 @@ export default function App() {
                 <div className="mono">{n(f.currentPrice)}</div>
                 <div className="mono">{n(f.dailyChangePercent, 1)}%</div>
                 <div className="actions">
-                  {[10, 25, -10, -25].map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={async () => {
-                        await adminApi.adjustPercent(f.id, p);
-                        setFish(await adminApi.fish());
-                      }}
-                    >
-                      {p > 0 ? `+${p}%` : `${p}%`}
-                    </button>
-                  ))}
                   <button
                     type="button"
                     onClick={async () => {
@@ -309,7 +357,7 @@ export default function App() {
                       setFish(await adminApi.fish());
                     }}
                   >
-                    Set
+                    Set price
                   </button>
                   <button
                     type="button"

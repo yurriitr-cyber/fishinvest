@@ -122,25 +122,50 @@ export class AdminService {
     const fish = await this.prisma.db.fish.findMany({
       orderBy: { sortOrder: 'asc' },
     });
-    return fish.map((f) => ({
-      id: f.id,
-      symbol: f.symbol,
-      name: f.name,
-      rarity: f.rarity,
-      currentPrice: f.currentPrice.toFixed(4),
-      previousPrice: f.previousPrice.toFixed(4),
-      dailyChangePercent: f.dailyChangePercent.toFixed(4),
-      dailyTargetPercent: f.dailyTargetPercent.toFixed(4),
-      volatility: f.volatility.toFixed(6),
-      trend: f.trend.toFixed(6),
-      totalSupply: f.totalSupply,
-      availableSupply: f.availableSupply,
-      minPrice: f.minPrice.toFixed(4),
-      maxPrice: f.maxPrice.toFixed(4),
-      isFrozen: f.isFrozen,
-      isActive: f.isActive,
-      sortOrder: f.sortOrder,
-    }));
+    const now = Date.now();
+    return fish.map((f) => {
+      const rampActive =
+        f.rampStartAt &&
+        f.rampEndAt &&
+        f.rampFromPrice &&
+        f.rampToPrice &&
+        f.rampEndAt.getTime() > now;
+      const rampProgress =
+        rampActive && f.rampStartAt && f.rampEndAt
+          ? Math.min(
+              1,
+              Math.max(
+                0,
+                (now - f.rampStartAt.getTime()) /
+                  Math.max(1, f.rampEndAt.getTime() - f.rampStartAt.getTime()),
+              ),
+            )
+          : null;
+      return {
+        id: f.id,
+        symbol: f.symbol,
+        name: f.name,
+        rarity: f.rarity,
+        currentPrice: f.currentPrice.toFixed(4),
+        previousPrice: f.previousPrice.toFixed(4),
+        dailyChangePercent: f.dailyChangePercent.toFixed(4),
+        dailyTargetPercent: f.dailyTargetPercent.toFixed(4),
+        rampFromPrice: f.rampFromPrice?.toFixed(4) ?? null,
+        rampToPrice: f.rampToPrice?.toFixed(4) ?? null,
+        rampStartAt: f.rampStartAt?.toISOString() ?? null,
+        rampEndAt: f.rampEndAt?.toISOString() ?? null,
+        rampProgress,
+        volatility: f.volatility.toFixed(6),
+        trend: f.trend.toFixed(6),
+        totalSupply: f.totalSupply,
+        availableSupply: f.availableSupply,
+        minPrice: f.minPrice.toFixed(4),
+        maxPrice: f.maxPrice.toFixed(4),
+        isFrozen: f.isFrozen,
+        isActive: f.isActive,
+        sortOrder: f.sortOrder,
+      };
+    });
   }
 
   async createFish(admin: User, data: {
@@ -248,13 +273,19 @@ export class AdminService {
   }
 
   /**
-   * Set expected % move over ~24h. Also widens min/max so the path isn't clipped.
+   * Schedule a smooth price move over `durationHours` (default 24).
+   * percent=10 → reach +10% of current price by end of window (not instantly).
    */
   async setDailyTargets(
     admin: User,
     targets: Array<{ fishId: string; percent: number }>,
+    durationHours = 24,
   ) {
+    const hours = Math.min(168, Math.max(1, durationHours));
     const results = [];
+    const now = new Date();
+    const end = new Date(now.getTime() + hours * 60 * 60 * 1000);
+
     for (const t of targets) {
       if (!Number.isFinite(t.percent) || t.percent < -90 || t.percent > 500) {
         throw new BadRequestException(
@@ -265,47 +296,86 @@ export class AdminService {
       if (!fish) throw new NotFoundException(`Fish not found: ${t.fishId}`);
 
       const price = Number(fish.currentPrice);
-      const abs = Math.abs(t.percent);
-      // ~2 weeks of room at this daily rate (or at least 3× / 0.3×)
-      const growthRoom = Math.pow(1 + abs / 100, 14);
-      const nextMax =
-        t.percent >= 0
-          ? Math.max(Number(fish.maxPrice), price * Math.max(3, growthRoom))
-          : Number(fish.maxPrice);
-      const nextMin =
-        t.percent <= 0
-          ? Math.min(
-              Number(fish.minPrice),
-              Math.max(0.001, price / Math.max(3, growthRoom)),
-            )
-          : Number(fish.minPrice);
+      const targetPrice =
+        Math.round(price * (1 + t.percent / 100) * 10000) / 10000;
+
+      if (t.percent === 0) {
+        const after = await this.prisma.db.fish.update({
+          where: { id: t.fishId },
+          data: {
+            dailyTargetPercent: 0,
+            rampFromPrice: null,
+            rampToPrice: null,
+            rampStartAt: null,
+            rampEndAt: null,
+          },
+        });
+        await this.log(
+          admin.id,
+          'CLEAR_PRICE_RAMP',
+          'fish',
+          t.fishId,
+          { dailyTargetPercent: fish.dailyTargetPercent },
+          { dailyTargetPercent: 0 },
+        );
+        results.push({
+          id: after.id,
+          symbol: after.symbol,
+          dailyTargetPercent: '0.0000',
+          currentPrice: after.currentPrice.toFixed(4),
+          rampToPrice: null,
+          rampEndAt: null,
+        });
+        continue;
+      }
+
+      const hi = Math.max(price, targetPrice);
+      const lo = Math.min(price, targetPrice);
+      const nextMax = Math.max(Number(fish.maxPrice), hi * 1.25, targetPrice * 1.1);
+      const nextMin = Math.min(
+        Number(fish.minPrice),
+        Math.max(0.001, lo * 0.75),
+      );
 
       const after = await this.prisma.db.fish.update({
         where: { id: t.fishId },
         data: {
           dailyTargetPercent: t.percent,
+          rampFromPrice: price,
+          rampToPrice: targetPrice,
+          rampStartAt: now,
+          rampEndAt: end,
           maxPrice: nextMax,
           minPrice: nextMin,
         },
       });
       await this.log(
         admin.id,
-        'SET_DAILY_TARGET',
+        'SET_PRICE_RAMP',
         'fish',
         t.fishId,
-        { dailyTargetPercent: fish.dailyTargetPercent },
-        { dailyTargetPercent: t.percent, maxPrice: nextMax, minPrice: nextMin },
+        { price, dailyTargetPercent: fish.dailyTargetPercent },
+        {
+          percent: t.percent,
+          from: price,
+          to: targetPrice,
+          hours,
+          rampEndAt: end.toISOString(),
+        },
       );
       results.push({
         id: after.id,
         symbol: after.symbol,
         dailyTargetPercent: after.dailyTargetPercent.toFixed(4),
         currentPrice: after.currentPrice.toFixed(4),
+        rampFromPrice: after.rampFromPrice?.toFixed(4) ?? null,
+        rampToPrice: after.rampToPrice?.toFixed(4) ?? null,
+        rampEndAt: after.rampEndAt?.toISOString() ?? null,
         minPrice: after.minPrice.toFixed(4),
         maxPrice: after.maxPrice.toFixed(4),
       });
     }
-    return { updated: results.length, fish: results };
+    return { updated: results.length, durationHours: hours, fish: results };
   }
 
   async freeze(admin: User, id: string, frozen: boolean) {

@@ -78,6 +78,10 @@ class DailyTargetsDto {
   @ValidateNested({ each: true })
   @Type(() => DailyTargetItemDto)
   targets!: DailyTargetItemDto[];
+
+  @IsOptional()
+  @IsNumber()
+  durationHours?: number;
 }
 
 @Controller('admin')
@@ -107,6 +111,7 @@ export class AdminController {
         fishId: t.fishId,
         percent: Number(t.percent),
       })),
+      dto.durationHours != null ? Number(dto.durationHours) : 24,
     );
   }
 

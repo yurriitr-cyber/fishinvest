@@ -176,8 +176,13 @@ model Fish {
   allTimeLow         Decimal    @map("all_time_low") @db.Decimal(20, 4)
   volatility         Decimal    @db.Decimal(10, 6)
   trend              Decimal    @db.Decimal(10, 6)
-  /** Expected price change over ~24h, e.g. 15 = +15%, -10 = -10%. */
+  /** Expected price change over the active ramp window (display), e.g. 15 = +15%. */
   dailyTargetPercent Decimal    @default(0) @map("daily_target_percent") @db.Decimal(10, 4)
+  /** Smooth admin ramp: price moves from → to between start/end (usually 24h). */
+  rampFromPrice      Decimal?   @map("ramp_from_price") @db.Decimal(20, 4)
+  rampToPrice        Decimal?   @map("ramp_to_price") @db.Decimal(20, 4)
+  rampStartAt        DateTime?  @map("ramp_start_at")
+  rampEndAt          DateTime?  @map("ramp_end_at")
   momentum           Decimal    @default(0) @db.Decimal(10, 6)
   minPrice           Decimal    @map("min_price") @db.Decimal(20, 4)
   maxPrice           Decimal    @map("max_price") @db.Decimal(20, 4)

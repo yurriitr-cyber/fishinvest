@@ -98,12 +98,24 @@ input, select {
 }
 .panel-head .muted { margin: 0; max-width: 52ch; line-height: 1.45; }
 .targets-grid {
-  grid-template-columns: 1.4fr 0.7fr 0.6fr 0.9fr;
+  grid-template-columns: 1.2fr 1fr 0.9fr 1.6fr;
 }
 .target-input {
-  width: 100%;
-  max-width: 110px;
+  width: 64px;
+  max-width: 64px;
+  text-align: center;
   font-family: var(--mono);
+}
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.stepper button {
+  padding: 6px 8px;
+  min-width: 32px;
+  font-size: 0.78rem;
 }
 .creds {
   margin-top: 24px;

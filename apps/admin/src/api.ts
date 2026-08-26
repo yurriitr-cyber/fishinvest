@@ -54,11 +54,17 @@ export const adminApi = {
     ),
   dashboard: () => request<Record<string, unknown>>('/admin/dashboard'),
   fish: () => request<Fish[]>('/admin/fish'),
-  setDailyTargets: (targets: Array<{ fishId: string; percent: number }>) =>
-    request<{ updated: number }>('/admin/fish/daily-targets', {
-      method: 'POST',
-      body: JSON.stringify({ targets }),
-    }),
+  setDailyTargets: (
+    targets: Array<{ fishId: string; percent: number }>,
+    durationHours = 24,
+  ) =>
+    request<{ updated: number; durationHours: number }>(
+      '/admin/fish/daily-targets',
+      {
+        method: 'POST',
+        body: JSON.stringify({ targets, durationHours }),
+      },
+    ),
   setPrice: (id: string, price: number) =>
     request(`/admin/fish/${id}/set-price`, {
       method: 'POST',
@@ -106,6 +112,11 @@ export type Fish = {
   price?: string | number;
   dailyChangePercent?: string | number;
   dailyTargetPercent?: string | number;
+  rampFromPrice?: string | number | null;
+  rampToPrice?: string | number | null;
+  rampStartAt?: string | null;
+  rampEndAt?: string | null;
+  rampProgress?: number | null;
   change?: string | number;
   volatility?: string | number;
   trend?: string | number;
