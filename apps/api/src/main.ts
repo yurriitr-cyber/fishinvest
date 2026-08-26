@@ -18,7 +18,8 @@ function loadRootEnv() {
   ];
   for (const envPath of candidates) {
     if (existsSync(envPath)) {
-      loadEnv({ path: envPath, override: true });
+      // Do not override Railway/injected env — local .env only fills gaps
+      loadEnv({ path: envPath, override: false });
       console.log(`Loaded env from ${envPath}`);
       return;
     }
