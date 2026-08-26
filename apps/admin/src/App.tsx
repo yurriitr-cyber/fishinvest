@@ -167,16 +167,20 @@ export default function App() {
           <div className="panel">
             <h2>Sign in</h2>
             <p className="muted">
-              1. Telegram ID: <code>819826046</code> (or yours from{' '}
-              <code>@userinfobot</code>)
+              1. Left sidebar → Telegram ID: <code>819826046</code>
               <br />
-              2. Secret: value of <code>INTERNAL_API_SECRET</code> or{' '}
-              <code>ADMIN_API_SECRET</code> from Railway →{' '}
-              <strong>@rare-fish/api</strong> → Variables (click the eye to
-              reveal).
+              2. Admin secret = Railway → service <code>@rare-fish/api</code> →
+              Variables → <code>INTERNAL_API_SECRET</code> (click the eye, copy
+              exactly, no spaces).
               <br />
-              3. Click <strong>Sign in</strong> in the left sidebar.
+              3. Click <strong>Sign in</strong>.
             </p>
+            {error && (
+              <p className="muted" style={{ marginTop: 12 }}>
+                Tip: if you still see Telegram errors, hard-refresh the page
+                (Cmd+Shift+R) after redeploy.
+              </p>
+            )}
           </div>
         )}
 

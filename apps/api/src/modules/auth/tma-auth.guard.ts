@@ -6,8 +6,23 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { validate, parse, InitData } from '@telegram-apps/init-data-node';
+import { timingSafeEqual } from 'crypto';
 
 export const INIT_DATA_KEY = 'initData';
+
+function headerValue(headers: Record<string, unknown>, name: string): string {
+  const raw = headers[name] ?? headers[name.toLowerCase()];
+  if (Array.isArray(raw)) return String(raw[0] ?? '').trim();
+  if (raw == null) return '';
+  return String(raw).trim();
+}
+
+function secretsEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length || left.length === 0) return false;
+  return timingSafeEqual(left, right);
+}
 
 @Injectable()
 export class TmaAuthGuard implements CanActivate {
@@ -23,27 +38,34 @@ export class TmaAuthGuard implements CanActivate {
     }
 
     const botToken = this.config.get<string>('TELEGRAM_BOT_TOKEN');
-    // Prefer dedicated admin secret; fall back to INTERNAL_API_SECRET so
-    // desktop admin works without a second Railway variable.
-    const adminSecret =
+    const configuredSecret = (
+      process.env.ADMIN_API_SECRET ||
       this.config.get<string>('ADMIN_API_SECRET') ||
+      process.env.INTERNAL_API_SECRET ||
       this.config.get<string>('INTERNAL_API_SECRET') ||
-      '';
-    const providedSecret =
-      (request.headers['x-admin-secret'] as string | undefined) || '';
+      ''
+    ).trim();
 
-    // Desktop admin console: shared secret + telegram id allowlist
-    if (
-      adminSecret &&
-      adminSecret.length >= 8 &&
-      providedSecret &&
-      providedSecret === adminSecret
-    ) {
-      const tgRaw =
-        (request.headers['x-admin-telegram-id'] as string | undefined) ||
-        (request.headers['x-dev-telegram-id'] as string | undefined);
+    const providedSecret = headerValue(request.headers, 'x-admin-secret');
+    const tgRaw =
+      headerValue(request.headers, 'x-admin-telegram-id') ||
+      headerValue(request.headers, 'x-dev-telegram-id');
+
+    // Desktop admin console path — never fall through to Telegram validate
+    // when a secret header is present (avoids opaque "Invalid Telegram init data").
+    if (providedSecret) {
+      if (!configuredSecret || configuredSecret.length < 8) {
+        throw new UnauthorizedException(
+          'Admin secret is not configured on API (set ADMIN_API_SECRET or INTERNAL_API_SECRET)',
+        );
+      }
+      if (!secretsEqual(providedSecret, configuredSecret)) {
+        throw new UnauthorizedException(
+          'Invalid admin secret (use INTERNAL_API_SECRET or ADMIN_API_SECRET from Railway → @rare-fish/api)',
+        );
+      }
       if (!tgRaw) {
-        throw new UnauthorizedException('Missing x-admin-telegram-id');
+        throw new UnauthorizedException('Missing Telegram id');
       }
       request[INIT_DATA_KEY] = {
         authDate: new Date(),
@@ -59,9 +81,8 @@ export class TmaAuthGuard implements CanActivate {
     }
 
     if (!botToken || botToken === 'your_bot_token_here') {
-      // Dev bypass when no token configured
       if (process.env.NODE_ENV === 'development') {
-        const devUserId = request.headers['x-dev-telegram-id'];
+        const devUserId = headerValue(request.headers, 'x-dev-telegram-id');
         if (devUserId) {
           request[INIT_DATA_KEY] = {
             authDate: new Date(),
