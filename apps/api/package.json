@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "prebuild": "pnpm --filter @rare-fish/shared build && pnpm --filter @rare-fish/db generate && pnpm --filter @rare-fish/db build",
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
