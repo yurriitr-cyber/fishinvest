@@ -28,6 +28,9 @@ const TON_PACKS = [0.5, 1, 2, 5, 10] as const;
 export class DepositService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DepositService.name);
   private tonTimer: NodeJS.Timeout | null = null;
+  private tonCache:
+    | { address: string; at: number; txs: Awaited<ReturnType<typeof fetchTonIncomings>> }
+    | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -65,10 +68,10 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
         this.pollTonDeposits().catch((err) =>
           this.logger.warn(`TON poll failed: ${err?.message || err}`),
         );
-      }, 5_000);
+      }, 12_000);
       setTimeout(() => {
         this.pollTonDeposits().catch(() => undefined);
-      }, 1_500);
+      }, 2_000);
       this.logger.log(`TON deposits enabled → ${tonAddr.slice(0, 8)}… (+${this.tonBonusPercent()}% bonus)`);
     } else {
       this.logger.log('TON deposits off (set TON_DEPOSIT_ADDRESS to enable)');
@@ -527,9 +530,32 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
     });
     if (pending.length === 0) return;
 
+    // One chain fetch for the whole batch
+    try {
+      await this.loadTonIncomings(address);
+    } catch (e) {
+      this.logger.warn(`TON fetch failed: ${e instanceof Error ? e.message : e}`);
+      return;
+    }
+
     for (const d of pending) {
       await this.tryConfirmTonDeposit(d.id);
     }
+  }
+
+  private async loadTonIncomings(address: string) {
+    const now = Date.now();
+    if (
+      this.tonCache &&
+      this.tonCache.address === address &&
+      now - this.tonCache.at < 8_000
+    ) {
+      return this.tonCache.txs;
+    }
+    const apiKey = this.config.get<string>('TONAPI_KEY') || undefined;
+    const txs = await fetchTonIncomings({ address, apiKey, limit: 40 });
+    this.tonCache = { address, at: now, txs };
+    return txs;
   }
 
   private async tryConfirmTonDeposit(depositId: string) {
@@ -548,7 +574,6 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
     }
 
     const address = (this.config.get<string>('TON_DEPOSIT_ADDRESS') || '').trim();
-    const apiKey = this.config.get<string>('TONAPI_KEY') || undefined;
     const meta =
       typeof deposit.metadata === 'object' && deposit.metadata
         ? (deposit.metadata as Record<string, unknown>)
@@ -560,7 +585,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
 
     let txs;
     try {
-      txs = await fetchTonIncomings({ address, apiKey, limit: 40 });
+      txs = await this.loadTonIncomings(address);
     } catch (e) {
       this.logger.warn(`TON fetch failed: ${e instanceof Error ? e.message : e}`);
       return;

@@ -36,7 +36,6 @@ export async function fetchTonIncomings(opts: {
   limit?: number;
 }): Promise<TonIncoming[]> {
   const limit = opts.limit ?? 40;
-  const out: TonIncoming[] = [];
 
   // TonAPI account events — best comment coverage
   try {
@@ -57,6 +56,7 @@ export async function fetchTonIncomings(opts: {
           }>;
         }>;
       };
+      const out: TonIncoming[] = [];
       for (const ev of data.events || []) {
         for (const action of ev.actions || []) {
           if (action.type !== 'TonTransfer' || action.status !== 'ok') continue;
@@ -72,7 +72,8 @@ export async function fetchTonIncomings(opts: {
           });
         }
       }
-      if (out.length) return out.filter((t) => t.hash);
+      // Trust TonAPI even when empty — don't hammer toncenter
+      return out.filter((t) => t.hash);
     }
   } catch {
     /* fall through */
@@ -94,6 +95,7 @@ export async function fetchTonIncomings(opts: {
           };
         }>;
       };
+      const out: TonIncoming[] = [];
       for (const tx of data.transactions || []) {
         const msg = tx.in_msg;
         if (!msg || !tx.hash) continue;
@@ -112,13 +114,13 @@ export async function fetchTonIncomings(opts: {
           utime: tx.utime ?? 0,
         });
       }
-      if (out.length) return out;
+      return out;
     }
   } catch {
     /* fall through */
   }
 
-  // Fallback: toncenter
+  // Fallback: toncenter (rate-limited without api key)
   const tc = new URL('https://toncenter.com/api/v2/getTransactions');
   tc.searchParams.set('address', opts.address);
   tc.searchParams.set('limit', String(limit));
