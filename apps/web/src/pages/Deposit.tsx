@@ -5,6 +5,7 @@ import {
   type DepositRecord,
   type Me,
   type StarsQuote,
+  type TonQuote,
 } from '../lib/api';
 import { formatStars } from '../lib/format';
 
@@ -38,24 +39,34 @@ export function Deposit({
   onCredited?: () => Promise<void> | void;
 }) {
   const [methods, setMethods] = useState<DepositMethod[]>([]);
+  const [channel, setChannel] = useState<'stars' | 'ton'>('stars');
   const [selected, setSelected] = useState<number | null>(100);
+  const [tonSelected, setTonSelected] = useState<number | null>(1);
   const [quote, setQuote] = useState<StarsQuote | null>(null);
+  const [tonQuote, setTonQuote] = useState<TonQuote | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDeposit, setLastDeposit] = useState<DepositRecord | null>(null);
 
   const starsMethod = methods.find((m) => m.code === 'TELEGRAM_STARS');
+  const tonMethod = methods.find((m) => m.code === 'TON');
   const packs = starsMethod?.packs || [50, 100, 250, 500, 1000];
+  const tonPacks = tonMethod?.tonPacks || [0.5, 1, 2, 5, 10];
 
   useEffect(() => {
     api
       .depositMethods()
-      .then(setMethods)
+      .then((m) => {
+        setMethods(m);
+        if (m.find((x) => x.code === 'TON')?.enabled) {
+          /* keep default stars */
+        }
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed'));
   }, []);
 
   useEffect(() => {
-    if (!selected || !starsMethod?.enabled) {
+    if (channel !== 'stars' || !selected || !starsMethod?.enabled) {
       setQuote(null);
       return;
     }
@@ -71,9 +82,50 @@ export function Deposit({
     return () => {
       cancelled = true;
     };
-  }, [selected, starsMethod?.enabled]);
+  }, [selected, starsMethod?.enabled, channel]);
 
-  async function pay() {
+  useEffect(() => {
+    if (channel !== 'ton' || !tonSelected || !tonMethod?.enabled) {
+      setTonQuote(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .quoteTon(tonSelected)
+      .then((q) => {
+        if (!cancelled) setTonQuote(q);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'TON quote failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tonSelected, tonMethod?.enabled, channel]);
+
+  useEffect(() => {
+    if (!lastDeposit || lastDeposit.provider !== 'TON') return;
+    if (lastDeposit.status === 'CONFIRMED') return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      try {
+        const fresh = await api.checkTonDeposit(lastDeposit.id);
+        if (cancelled) return;
+        setLastDeposit(fresh);
+        if (fresh.status === 'CONFIRMED') {
+          await onCredited?.();
+        }
+      } catch {
+        /* ignore transient */
+      }
+    }, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [lastDeposit?.id, lastDeposit?.status, lastDeposit?.provider, onCredited]);
+
+  async function payStars() {
     if (!selected) return;
     setBusy(true);
     setError(null);
@@ -83,9 +135,7 @@ export function Deposit({
         `stars-ui:${me.id}:${selected}:${Date.now()}`,
       );
       setLastDeposit(deposit);
-      if (!deposit.invoiceLink) {
-        throw new Error('Invoice link missing');
-      }
+      if (!deposit.invoiceLink) throw new Error('Invoice link missing');
       const status = await openTelegramInvoice(deposit.invoiceLink);
       if (status === 'paid') {
         for (let i = 0; i < 8; i++) {
@@ -109,13 +159,41 @@ export function Deposit({
     }
   }
 
+  async function payTon() {
+    if (!tonSelected) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const deposit = await api.createTonDeposit(
+        tonSelected,
+        `ton-ui:${me.id}:${tonSelected}:${Date.now()}`,
+      );
+      setLastDeposit(deposit);
+      if (deposit.transferLink) {
+        window.location.href = deposit.transferLink;
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'TON deposit failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* ignore */
+    }
+  }
+
   return (
     <div className="screen">
       <div className="topbar">
         <div>
-          <div className="eyebrow">Fiat gate</div>
+          <div className="eyebrow">Top up</div>
           <h1>Deposit</h1>
-          <p>Telegram Stars → game ⭐ · 1:1</p>
+          <p>Stars or TON → game credits</p>
         </div>
         <div className="balance-pill">
           <div className="label">Balance</div>
@@ -124,6 +202,24 @@ export function Deposit({
       </div>
 
       {error && <div className="error-box">{error}</div>}
+
+      <div className="side-toggle" style={{ marginBottom: 14 }}>
+        <button
+          type="button"
+          className={`buy ${channel === 'stars' ? 'active' : ''}`}
+          onClick={() => setChannel('stars')}
+        >
+          Stars
+        </button>
+        <button
+          type="button"
+          className={`sell ${channel === 'ton' ? 'active' : ''}`}
+          onClick={() => setChannel('ton')}
+          disabled={!tonMethod?.enabled}
+        >
+          TON{!tonMethod?.enabled ? ' · soon' : ''}
+        </button>
+      </div>
 
       <div className="section-title">Methods</div>
       <div className="list">
@@ -145,7 +241,7 @@ export function Deposit({
         ))}
       </div>
 
-      {starsMethod?.enabled && (
+      {channel === 'stars' && starsMethod?.enabled && (
         <div className="trade-panel">
           <div className="section-title" style={{ marginTop: 0 }}>
             Amount
@@ -182,20 +278,106 @@ export function Deposit({
             className="btn btn-solid"
             type="button"
             disabled={busy || !selected}
-            onClick={pay}
+            onClick={payStars}
           >
             {busy ? 'Opening invoice…' : `Pay ⭐ ${selected}`}
           </button>
+        </div>
+      )}
 
-          {lastDeposit && (
-            <p className="meme">
-              Order {lastDeposit.id.slice(0, 8)}… · {lastDeposit.status}
-              {lastDeposit.status === 'CONFIRMED'
-                ? ` · +${formatStars(lastDeposit.gameCreditAmount || '0')}`
-                : ''}
-            </p>
+      {channel === 'ton' && tonMethod?.enabled && (
+        <div className="trade-panel">
+          <div className="section-title" style={{ marginTop: 0 }}>
+            Amount (TON)
+          </div>
+          <div className="qty-presets">
+            {tonPacks.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`chip ${tonSelected === n ? 'active' : ''}`}
+                onClick={() => setTonSelected(n)}
+              >
+                {n} TON
+              </button>
+            ))}
+          </div>
+
+          {tonQuote && (
+            <div className="summary">
+              <div className="summary-item">
+                <div className="label">TON / USD</div>
+                <div className="value">${Number(tonQuote.tonUsdPrice).toFixed(2)}</div>
+              </div>
+              <div className="summary-item">
+                <div className="label">You receive</div>
+                <div className="value">
+                  ⭐ {formatStars(tonQuote.gameCreditAmount)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
+            className="btn btn-solid"
+            type="button"
+            disabled={busy || !tonSelected}
+            onClick={payTon}
+          >
+            {busy ? 'Creating…' : `Pay ${tonSelected} TON`}
+          </button>
+
+          {lastDeposit?.provider === 'TON' && lastDeposit.status !== 'CONFIRMED' && (
+            <div style={{ marginTop: 14 }}>
+              <p className="meme" style={{ marginTop: 0 }}>
+                Send exactly <strong>{lastDeposit.assetAmount} TON</strong> with
+                comment/memo <strong>{lastDeposit.memo}</strong>. Credits appear
+                after the chain confirms (auto-check every ~8s).
+              </p>
+              {lastDeposit.depositAddress && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ marginBottom: 8 }}
+                  onClick={() => copy(lastDeposit.depositAddress || '')}
+                >
+                  Copy address
+                </button>
+              )}
+              {lastDeposit.memo && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ marginBottom: 8 }}
+                  onClick={() => copy(lastDeposit.memo || '')}
+                >
+                  Copy memo
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={async () => {
+                  const fresh = await api.checkTonDeposit(lastDeposit.id);
+                  setLastDeposit(fresh);
+                  if (fresh.status === 'CONFIRMED') await onCredited?.();
+                }}
+              >
+                I paid — check now
+              </button>
+            </div>
           )}
         </div>
+      )}
+
+      {lastDeposit && (
+        <p className="meme">
+          Order {lastDeposit.id.slice(0, 8)}… · {lastDeposit.provider} ·{' '}
+          {lastDeposit.status}
+          {lastDeposit.status === 'CONFIRMED'
+            ? ` · +${formatStars(lastDeposit.gameCreditAmount || '0')}`
+            : ''}
+        </p>
       )}
     </div>
   );

@@ -107,6 +107,7 @@ export type DepositMethod = {
   feePercent: string;
   note: string;
   packs?: number[];
+  tonPacks?: number[];
 };
 
 export type StarsQuote = {
@@ -132,7 +133,23 @@ export type DepositRecord = {
   exchangeRate: string | null;
   status: string;
   invoiceLink: string | null;
+  depositAddress?: string | null;
+  memo?: string | null;
+  transferLink?: string | null;
+  rateNote?: string | null;
   createdAt: string;
+};
+
+export type TonQuote = {
+  provider: string;
+  assetAmount: string;
+  tonUsdPrice: string;
+  usdValue: string;
+  gameCreditAmount: string;
+  feePercent: string;
+  rateNote: string;
+  depositAddress: string;
+  exchangeRate: string;
 };
 
 type AuthState = {
@@ -224,5 +241,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ starAmount, idempotencyKey }),
     }),
+  quoteTon: (tonAmount: number) =>
+    request<TonQuote>('/deposit/ton/quote', {
+      method: 'POST',
+      body: JSON.stringify({ tonAmount }),
+    }),
+  createTonDeposit: (tonAmount: number, idempotencyKey?: string) =>
+    request<DepositRecord>('/deposit/ton', {
+      method: 'POST',
+      body: JSON.stringify({ tonAmount, idempotencyKey }),
+    }),
+  checkTonDeposit: (id: string) =>
+    request<DepositRecord>(`/deposit/ton/${id}/check`, { method: 'POST' }),
   getDeposit: (id: string) => request<DepositRecord>(`/deposit/${id}`),
 };

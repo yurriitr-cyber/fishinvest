@@ -61,6 +61,16 @@ class StarsPreCheckoutDto {
   telegramUserId!: number;
 }
 
+class TonAmountDto {
+  @IsNumber()
+  @Min(0.1)
+  tonAmount!: number;
+
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
+}
+
 @Controller('deposit')
 export class DepositController {
   constructor(
@@ -93,6 +103,36 @@ export class DepositController {
       dto.starAmount,
       dto.idempotencyKey,
     );
+  }
+
+  @Post('ton/quote')
+  @UseGuards(TmaAuthGuard)
+  quoteTon(@Body() dto: TonAmountDto) {
+    return this.deposits.quoteTon(dto.tonAmount);
+  }
+
+  @Post('ton')
+  @UseGuards(TmaAuthGuard)
+  async createTon(
+    @TelegramInitData() initData: InitData,
+    @Body() dto: TonAmountDto,
+  ) {
+    const { user } = await this.users.getOrCreateFromInitData(initData);
+    return this.deposits.createTonDeposit(
+      user.id,
+      dto.tonAmount,
+      dto.idempotencyKey,
+    );
+  }
+
+  @Post('ton/:id/check')
+  @UseGuards(TmaAuthGuard)
+  async checkTon(
+    @TelegramInitData() initData: InitData,
+    @Param('id') id: string,
+  ) {
+    const { user } = await this.users.getOrCreateFromInitData(initData);
+    return this.deposits.checkTonDeposit(user.id, id);
   }
 
   @Get(':id')

@@ -2,23 +2,38 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@rare-fish/db';
 import { randomUUID } from 'crypto';
 import { LedgerService } from '../ledger/ledger.service';
+import { OracleService } from '../oracle/oracle.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  buildTonTransferLink,
+  fetchTonIncomings,
+  memoForDeposit,
+  nanoToTonString,
+  tonToNano,
+} from './ton.util';
 
 const STAR_PACKS = [50, 100, 250, 500, 1000] as const;
+const TON_PACKS = [0.5, 1, 2, 5, 10] as const;
 
 @Injectable()
-export class DepositService implements OnModuleInit {
+export class DepositService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(DepositService.name);
+  private tonTimer: NodeJS.Timeout | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly config: ConfigService,
+    private readonly oracle: OracleService,
   ) {}
 
   async onModuleInit() {
@@ -38,6 +53,30 @@ export class DepositService implements OnModuleInit {
       },
       data: { rate },
     });
+
+    // Enable TON when a deposit wallet is configured
+    const tonAddr = (this.config.get<string>('TON_DEPOSIT_ADDRESS') || '').trim();
+    if (tonAddr) {
+      await this.prisma.db.paymentProviderConfig.updateMany({
+        where: { code: 'TON' },
+        data: { isEnabled: true, feePercent: 0 },
+      });
+      this.tonTimer = setInterval(() => {
+        this.pollTonDeposits().catch((err) =>
+          this.logger.warn(`TON poll failed: ${err?.message || err}`),
+        );
+      }, 20_000);
+      setTimeout(() => {
+        this.pollTonDeposits().catch(() => undefined);
+      }, 5_000);
+      this.logger.log(`TON deposits enabled → ${tonAddr.slice(0, 8)}…`);
+    } else {
+      this.logger.log('TON deposits off (set TON_DEPOSIT_ADDRESS to enable)');
+    }
+  }
+
+  onModuleDestroy() {
+    if (this.tonTimer) clearInterval(this.tonTimer);
   }
   listStarPacks() {
     return [...STAR_PACKS];
@@ -56,7 +95,7 @@ export class DepositService implements OnModuleInit {
       },
       TON: {
         label: '💎 TON',
-        note: 'Live oracle rate TON → USD → Stars-equivalent',
+        note: 'Send TON with memo — credited via live oracle',
       },
       TELEGRAM_GIFT: {
         label: '🎁 Telegram Gift',
@@ -81,6 +120,7 @@ export class DepositService implements OnModuleInit {
           ? meta.note
           : 'Provider scaffolded — not enabled yet',
         packs: p.code === 'TELEGRAM_STARS' ? this.listStarPacks() : undefined,
+        tonPacks: p.code === 'TON' && p.isEnabled ? [...TON_PACKS] : undefined,
       };
     });
   }
@@ -331,6 +371,255 @@ export class DepositService implements OnModuleInit {
     return true;
   }
 
+  /** Approx Telegram Star USD for converting TON→credits (1★ = 1 credit). */
+  private starUsdPrice(): Prisma.Decimal {
+    const raw = this.config.get<string>('STAR_USD_PRICE') || '0.02';
+    return new Prisma.Decimal(raw);
+  }
+
+  async quoteTon(tonAmount: number) {
+    if (!Number.isFinite(tonAmount) || tonAmount < 0.1 || tonAmount > 500) {
+      throw new BadRequestException('TON amount must be between 0.1 and 500');
+    }
+    await this.requireProvider('TON');
+    const address = (this.config.get<string>('TON_DEPOSIT_ADDRESS') || '').trim();
+    if (!address) {
+      throw new BadRequestException('TON_DEPOSIT_ADDRESS is not configured');
+    }
+
+    const ton = await this.oracle.getTonUsd();
+    const tonUsd = new Prisma.Decimal(ton.usdPrice);
+    const assetAmount = new Prisma.Decimal(tonAmount.toFixed(9));
+    const usdValue = assetAmount.mul(tonUsd);
+    const starUsd = this.starUsdPrice();
+    const starsEquivalent = usdValue.div(starUsd);
+    const creditRate = await this.getStarsToGameCreditRate();
+    const provider = await this.requireProvider('TON');
+    const feePercent = provider.feePercent;
+    const gross = starsEquivalent.mul(creditRate);
+    const feeAmount = gross.mul(feePercent).div(100);
+    const net = gross.sub(feeAmount);
+
+    return {
+      provider: 'TON' as const,
+      assetType: 'TON',
+      assetAmount: assetAmount.toFixed(9),
+      tonUsdPrice: tonUsd.toFixed(8),
+      usdValue: usdValue.toFixed(8),
+      starUsdPrice: starUsd.toFixed(8),
+      exchangeRate: creditRate.div(starUsd).mul(tonUsd).toFixed(8), // credits per 1 TON
+      rateSource: ton.source,
+      rateNote: `1 TON ≈ $${ton.usdPrice} → credits via $${starUsd}/★ (1★=1 credit)`,
+      feePercent: feePercent.toFixed(4),
+      grossGameCredits: gross.toFixed(4),
+      feeAmount: feeAmount.toFixed(4),
+      gameCreditAmount: net.toFixed(4),
+      depositAddress: address,
+    };
+  }
+
+  async createTonDeposit(userId: string, tonAmount: number, idempotencyKey?: string) {
+    const quote = await this.quoteTon(tonAmount);
+    const key = idempotencyKey || `ton:${userId}:${tonAmount}:${randomUUID()}`;
+
+    const existing = await this.prisma.db.deposit.findUnique({
+      where: { idempotencyKey: key },
+    });
+    if (existing) {
+      return this.serializeDeposit(existing);
+    }
+
+    const deposit = await this.prisma.db.deposit.create({
+      data: {
+        userId,
+        provider: 'TON',
+        assetType: 'TON',
+        assetAmount: quote.assetAmount,
+        assetUsdValue: quote.usdValue,
+        exchangeRate: quote.exchangeRate,
+        grossGameCredits: quote.grossGameCredits,
+        feePercent: quote.feePercent,
+        feeAmount: quote.feeAmount,
+        gameCreditAmount: quote.gameCreditAmount,
+        status: 'PENDING',
+        oracleSource: quote.rateSource,
+        idempotencyKey: key,
+        quoteExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        metadata: {},
+      },
+    });
+
+    const memo = memoForDeposit(deposit.id);
+    const amountNano = tonToNano(Number(quote.assetAmount));
+    const transferLink = buildTonTransferLink({
+      address: quote.depositAddress,
+      amountNano,
+      comment: memo,
+    });
+
+    const meta = {
+      rateNote: quote.rateNote,
+      tonUsdPrice: quote.tonUsdPrice,
+      starUsdPrice: quote.starUsdPrice,
+      depositAddress: quote.depositAddress,
+      memo,
+      amountNano: amountNano.toString(),
+      transferLink,
+    };
+
+    const updated = await this.prisma.db.deposit.update({
+      where: { id: deposit.id },
+      data: { metadata: meta },
+    });
+
+    await this.prisma.db.paymentTransaction.create({
+      data: {
+        depositId: deposit.id,
+        step: 'TON_INVOICE_CREATED',
+        payload: meta,
+      },
+    });
+
+    return this.serializeDeposit(updated, meta);
+  }
+
+  async checkTonDeposit(userId: string, depositId: string) {
+    const deposit = await this.prisma.db.deposit.findFirst({
+      where: { id: depositId, userId, provider: 'TON' },
+    });
+    if (!deposit) throw new NotFoundException('Deposit not found');
+    if (deposit.status === 'CONFIRMED') {
+      return this.serializeDeposit(deposit);
+    }
+    await this.tryConfirmTonDeposit(deposit.id);
+    const fresh = await this.prisma.db.deposit.findUniqueOrThrow({
+      where: { id: deposit.id },
+    });
+    return this.serializeDeposit(fresh);
+  }
+
+  async pollTonDeposits() {
+    const address = (this.config.get<string>('TON_DEPOSIT_ADDRESS') || '').trim();
+    if (!address) return;
+
+    const pending = await this.prisma.db.deposit.findMany({
+      where: {
+        provider: 'TON',
+        status: 'PENDING',
+        quoteExpiresAt: { gt: new Date() },
+      },
+      take: 50,
+      orderBy: { createdAt: 'asc' },
+    });
+    if (pending.length === 0) return;
+
+    for (const d of pending) {
+      await this.tryConfirmTonDeposit(d.id);
+    }
+  }
+
+  private async tryConfirmTonDeposit(depositId: string) {
+    const deposit = await this.prisma.db.deposit.findUnique({
+      where: { id: depositId },
+    });
+    if (!deposit || deposit.provider !== 'TON' || deposit.status !== 'PENDING') {
+      return;
+    }
+    if (deposit.quoteExpiresAt && deposit.quoteExpiresAt < new Date()) {
+      await this.prisma.db.deposit.update({
+        where: { id: deposit.id },
+        data: { status: 'CANCELLED' },
+      });
+      return;
+    }
+
+    const address = (this.config.get<string>('TON_DEPOSIT_ADDRESS') || '').trim();
+    const apiKey = this.config.get<string>('TONAPI_KEY') || undefined;
+    const meta =
+      typeof deposit.metadata === 'object' && deposit.metadata
+        ? (deposit.metadata as Record<string, unknown>)
+        : {};
+    const memo = String(meta.memo || memoForDeposit(deposit.id));
+    const expectedNano = tonToNano(Number(deposit.assetAmount));
+    // Accept slight underpay from rounding (≥ 99%)
+    const minNano = (expectedNano * 99n) / 100n;
+
+    let txs;
+    try {
+      txs = await fetchTonIncomings({ address, apiKey, limit: 40 });
+    } catch (e) {
+      this.logger.warn(`TON fetch failed: ${e instanceof Error ? e.message : e}`);
+      return;
+    }
+
+    const match = txs.find((tx) => {
+      if (tx.valueNano < minNano) return false;
+      const c = tx.comment.toLowerCase();
+      return c.includes(memo.toLowerCase());
+    });
+    if (!match) return;
+
+    // Already used?
+    const byHash = await this.prisma.db.deposit.findUnique({
+      where: { externalTransactionId: match.hash },
+    });
+    if (byHash && byHash.id !== deposit.id) {
+      this.logger.warn(`TON tx ${match.hash} already linked to ${byHash.id}`);
+      return;
+    }
+
+    await this.prisma.db.$transaction(async (tx) => {
+      const locked = await tx.deposit.findUnique({ where: { id: deposit.id } });
+      if (!locked || locked.status === 'CONFIRMED') return;
+      const net = locked.gameCreditAmount;
+      if (!net) throw new BadRequestException('Deposit missing credit amount');
+
+      await this.ledger.creditInTransaction(tx, {
+        userId: locked.userId,
+        type: 'DEPOSIT_TON',
+        amount: net,
+        idempotencyKey: `deposit:ton:${locked.id}`,
+        referenceType: 'deposit',
+        referenceId: locked.id,
+        metadata: {
+          txHash: match.hash,
+          tonPaid: nanoToTonString(match.valueNano),
+          memo,
+        },
+      });
+
+      await tx.deposit.update({
+        where: { id: locked.id },
+        data: {
+          status: 'CONFIRMED',
+          confirmedAt: new Date(),
+          externalTransactionId: match.hash,
+          metadata: {
+            ...(typeof locked.metadata === 'object' && locked.metadata
+              ? (locked.metadata as object)
+              : {}),
+            txHash: match.hash,
+            tonPaid: nanoToTonString(match.valueNano),
+          },
+        },
+      });
+
+      await tx.paymentTransaction.create({
+        data: {
+          depositId: locked.id,
+          step: 'TON_PAYMENT_CONFIRMED',
+          payload: {
+            txHash: match.hash,
+            valueNano: match.valueNano.toString(),
+            comment: match.comment,
+          },
+        },
+      });
+    });
+
+    this.logger.log(`TON deposit confirmed ${deposit.id} tx=${match.hash}`);
+  }
+
   private async requireProvider(code: 'TELEGRAM_STARS' | 'TON' | 'TELEGRAM_GIFT' | 'CRYPTO') {
     const provider = await this.prisma.db.paymentProviderConfig.findUnique({
       where: { code },
@@ -401,7 +690,10 @@ export class DepositService implements OnModuleInit {
       id: deposit.id,
       provider: deposit.provider,
       assetType: deposit.assetType,
-      assetAmount: deposit.assetAmount.toFixed(4),
+      assetAmount:
+        deposit.provider === 'TON'
+          ? deposit.assetAmount.toFixed(9)
+          : deposit.assetAmount.toFixed(4),
       exchangeRate: deposit.exchangeRate?.toFixed(8) ?? null,
       grossGameCredits: deposit.grossGameCredits?.toFixed(4) ?? null,
       feePercent: deposit.feePercent?.toFixed(4) ?? null,
@@ -409,6 +701,12 @@ export class DepositService implements OnModuleInit {
       gameCreditAmount: deposit.gameCreditAmount?.toFixed(4) ?? null,
       status: deposit.status,
       invoiceLink: typeof meta.invoiceLink === 'string' ? meta.invoiceLink : null,
+      depositAddress:
+        typeof meta.depositAddress === 'string' ? meta.depositAddress : null,
+      memo: typeof meta.memo === 'string' ? meta.memo : null,
+      transferLink:
+        typeof meta.transferLink === 'string' ? meta.transferLink : null,
+      rateNote: typeof meta.rateNote === 'string' ? meta.rateNote : null,
       externalTransactionId: deposit.externalTransactionId,
       confirmedAt: deposit.confirmedAt?.toISOString() ?? null,
       createdAt: deposit.createdAt.toISOString(),
