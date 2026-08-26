@@ -83,7 +83,11 @@ export function PortfolioPage({
                 type="button"
                 onClick={() => onSelectFish(p.fishId)}
               >
-                <MediaSlot className="thumb" label={fishGlyph(p.symbol)} />
+                {p.imageUrl ? (
+                  <img className="glyph" src={p.imageUrl} alt="" />
+                ) : (
+                  <MediaSlot className="thumb" label={fishGlyph(p.symbol)} />
+                )}
                 <div className="row-main">
                   <div className="name">{p.symbol}</div>
                   <div className="meta">

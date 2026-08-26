@@ -121,6 +121,12 @@ export function Trade({
             </div>
           </div>
 
+          {fish.imageUrl ? (
+            <div className="fish-hero">
+              <img src={fish.imageUrl} alt={fish.name} />
+            </div>
+          ) : null}
+
           <div className="price-hero mono">
             {formatStars(fish.currentPrice, 2)}
             <span className={`chg ${pnlClass(fish.dailyChangePercent)}`}>

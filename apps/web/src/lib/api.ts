@@ -58,6 +58,7 @@ export type Portfolio = {
     symbol: string;
     name: string;
     rarity: string;
+    imageUrl: string | null;
     quantity: string;
     avgBuyPrice: string;
     currentPrice: string;
