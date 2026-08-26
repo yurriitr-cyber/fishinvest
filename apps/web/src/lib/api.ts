@@ -147,6 +147,8 @@ export type TonQuote = {
   usdValue: string;
   gameCreditAmount: string;
   feePercent: string;
+  bonusPercent?: string;
+  bonusAmount?: string;
   rateNote: string;
   depositAddress: string;
   exchangeRate: string;

@@ -16,13 +16,69 @@ function headers(apiKey?: string): HeadersInit {
   return h;
 }
 
+function decodeMaybeBase64(raw: string): string {
+  if (!raw) return '';
+  // toncenter sometimes returns base64-encoded comments
+  if (/^[A-Za-z0-9+/=]+$/.test(raw) && raw.length % 4 === 0) {
+    try {
+      const decoded = Buffer.from(raw, 'base64').toString('utf8');
+      if (/^[\x20-\x7E]+$/.test(decoded)) return decoded;
+    } catch {
+      /* keep raw */
+    }
+  }
+  return raw;
+}
+
 export async function fetchTonIncomings(opts: {
   address: string;
   apiKey?: string;
   limit?: number;
 }): Promise<TonIncoming[]> {
-  const limit = opts.limit ?? 30;
-  // Prefer TonAPI v2
+  const limit = opts.limit ?? 40;
+  const out: TonIncoming[] = [];
+
+  // TonAPI account events — best comment coverage
+  try {
+    const url = `https://tonapi.io/v2/accounts/${encodeURIComponent(opts.address)}/events?limit=${limit}`;
+    const res = await fetch(url, { headers: headers(opts.apiKey) });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        events?: Array<{
+          event_id?: string;
+          timestamp?: number;
+          actions?: Array<{
+            type?: string;
+            status?: string;
+            TonTransfer?: {
+              amount?: number | string;
+              comment?: string;
+            };
+          }>;
+        }>;
+      };
+      for (const ev of data.events || []) {
+        for (const action of ev.actions || []) {
+          if (action.type !== 'TonTransfer' || action.status !== 'ok') continue;
+          const tr = action.TonTransfer;
+          if (!tr) continue;
+          const valueNano = BigInt(tr.amount ?? 0);
+          if (valueNano <= 0n) continue;
+          out.push({
+            hash: String(ev.event_id || ''),
+            valueNano,
+            comment: String(tr.comment || ''),
+            utime: ev.timestamp ?? 0,
+          });
+        }
+      }
+      if (out.length) return out.filter((t) => t.hash);
+    }
+  } catch {
+    /* fall through */
+  }
+
+  // TonAPI raw transactions
   try {
     const url = `https://tonapi.io/v2/blockchain/accounts/${encodeURIComponent(opts.address)}/transactions?limit=${limit}`;
     const res = await fetch(url, { headers: headers(opts.apiKey) });
@@ -34,23 +90,21 @@ export async function fetchTonIncomings(opts: {
           in_msg?: {
             value?: number | string;
             decoded_body?: { text?: string; comment?: string };
-            message_content?: { decoded?: { comment?: string } };
-            op_code?: number;
+            message_content?: { decoded?: { comment?: string; text?: string } };
           };
         }>;
       };
-      const out: TonIncoming[] = [];
       for (const tx of data.transactions || []) {
         const msg = tx.in_msg;
-        if (!msg) continue;
+        if (!msg || !tx.hash) continue;
         const valueNano = BigInt(msg.value ?? 0);
         if (valueNano <= 0n) continue;
         const comment =
           msg.decoded_body?.text ||
           msg.decoded_body?.comment ||
           msg.message_content?.decoded?.comment ||
+          msg.message_content?.decoded?.text ||
           '';
-        if (!tx.hash) continue;
         out.push({
           hash: tx.hash,
           valueNano,
@@ -58,7 +112,7 @@ export async function fetchTonIncomings(opts: {
           utime: tx.utime ?? 0,
         });
       }
-      return out;
+      if (out.length) return out;
     }
   } catch {
     /* fall through */
@@ -84,7 +138,7 @@ export async function fetchTonIncomings(opts: {
   return data.result
     .map((tx) => {
       const valueNano = BigInt(tx.in_msg?.value ?? '0');
-      const comment = tx.in_msg?.message || '';
+      const comment = decodeMaybeBase64(tx.in_msg?.message || '');
       return {
         hash: tx.transaction_id?.hash || '',
         valueNano,
@@ -96,7 +150,6 @@ export async function fetchTonIncomings(opts: {
 }
 
 export function tonToNano(ton: number): bigint {
-  // Avoid float issues: work with 9 decimal places
   const s = ton.toFixed(9);
   const [whole, frac = ''] = s.split('.');
   return BigInt(whole) * 1_000_000_000n + BigInt((frac + '000000000').slice(0, 9));

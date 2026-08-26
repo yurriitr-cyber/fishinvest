@@ -65,11 +65,11 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
         this.pollTonDeposits().catch((err) =>
           this.logger.warn(`TON poll failed: ${err?.message || err}`),
         );
-      }, 20_000);
+      }, 10_000);
       setTimeout(() => {
         this.pollTonDeposits().catch(() => undefined);
-      }, 5_000);
-      this.logger.log(`TON deposits enabled → ${tonAddr.slice(0, 8)}…`);
+      }, 3_000);
+      this.logger.log(`TON deposits enabled → ${tonAddr.slice(0, 8)}… (+${this.tonBonusPercent()}% bonus)`);
     } else {
       this.logger.log('TON deposits off (set TON_DEPOSIT_ADDRESS to enable)');
     }
@@ -95,7 +95,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       },
       TON: {
         label: '💎 TON',
-        note: 'Send TON with memo — credited via live oracle',
+        note: 'Live TON→★ rate + 15% bonus · auto-confirm',
       },
       TELEGRAM_GIFT: {
         label: '🎁 Telegram Gift',
@@ -377,6 +377,13 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
     return new Prisma.Decimal(raw);
   }
 
+  /** Extra credits on TON deposits (default +15%). */
+  private tonBonusPercent(): Prisma.Decimal {
+    const raw = this.config.get<string>('TON_DEPOSIT_BONUS_PERCENT');
+    if (raw === undefined || raw === '') return new Prisma.Decimal(15);
+    return new Prisma.Decimal(raw);
+  }
+
   async quoteTon(tonAmount: number) {
     if (!Number.isFinite(tonAmount) || tonAmount < 0.1 || tonAmount > 500) {
       throw new BadRequestException('TON amount must be between 0.1 and 500');
@@ -398,7 +405,10 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
     const feePercent = provider.feePercent;
     const gross = starsEquivalent.mul(creditRate);
     const feeAmount = gross.mul(feePercent).div(100);
-    const net = gross.sub(feeAmount);
+    const afterFee = gross.sub(feeAmount);
+    const bonusPercent = this.tonBonusPercent();
+    const bonusAmount = afterFee.mul(bonusPercent).div(100);
+    const net = afterFee.add(bonusAmount);
 
     return {
       provider: 'TON' as const,
@@ -407,10 +417,12 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       tonUsdPrice: tonUsd.toFixed(8),
       usdValue: usdValue.toFixed(8),
       starUsdPrice: starUsd.toFixed(8),
-      exchangeRate: creditRate.div(starUsd).mul(tonUsd).toFixed(8), // credits per 1 TON
+      exchangeRate: creditRate.div(starUsd).mul(tonUsd).toFixed(8), // base credits per 1 TON (before bonus)
       rateSource: ton.source,
-      rateNote: `1 TON ≈ $${ton.usdPrice} → credits via $${starUsd}/★ (1★=1 credit)`,
+      rateNote: `Live TON/USD ($${ton.usdPrice}) → ★@$${starUsd} + ${bonusPercent}% TON bonus`,
       feePercent: feePercent.toFixed(4),
+      bonusPercent: bonusPercent.toFixed(4),
+      bonusAmount: bonusAmount.toFixed(4),
       grossGameCredits: gross.toFixed(4),
       feeAmount: feeAmount.toFixed(4),
       gameCreditAmount: net.toFixed(4),
@@ -461,6 +473,8 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       rateNote: quote.rateNote,
       tonUsdPrice: quote.tonUsdPrice,
       starUsdPrice: quote.starUsdPrice,
+      bonusPercent: quote.bonusPercent,
+      bonusAmount: quote.bonusAmount,
       depositAddress: quote.depositAddress,
       memo,
       amountNano: amountNano.toString(),
@@ -707,6 +721,9 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       transferLink:
         typeof meta.transferLink === 'string' ? meta.transferLink : null,
       rateNote: typeof meta.rateNote === 'string' ? meta.rateNote : null,
+      bonusPercent:
+        typeof meta.bonusPercent === 'string' ? meta.bonusPercent : null,
+      bonusAmount: typeof meta.bonusAmount === 'string' ? meta.bonusAmount : null,
       externalTransactionId: deposit.externalTransactionId,
       confirmedAt: deposit.confirmedAt?.toISOString() ?? null,
       createdAt: deposit.createdAt.toISOString(),

@@ -315,6 +315,21 @@ export function Deposit({
                   ⭐ {formatStars(tonQuote.gameCreditAmount)}
                 </div>
               </div>
+              <div className="summary-item">
+                <div className="label">TON bonus</div>
+                <div className="value">
+                  +{Number(tonQuote.bonusPercent ?? 15).toFixed(0)}%
+                  {tonQuote.bonusAmount
+                    ? ` (⭐ ${formatStars(tonQuote.bonusAmount)})`
+                    : ''}
+                </div>
+              </div>
+              <div className="summary-item">
+                <div className="label">Rate</div>
+                <div className="value" style={{ fontSize: 12 }}>
+                  live oracle
+                </div>
+              </div>
             </div>
           )}
 
