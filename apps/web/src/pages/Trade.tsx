@@ -10,6 +10,7 @@ import {
   pnlClass,
 } from '../lib/format';
 import { fishLore } from '../lib/fishLore';
+import { fishName, rarityLabel, translateError } from '../lib/labels';
 
 export function Trade({
   fishId,
@@ -37,7 +38,11 @@ export function Trade({
         const data = await api.fishOne(fishId);
         if (!cancelled) setFish(data);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed');
+        if (!cancelled) {
+          setError(
+            translateError(e instanceof Error ? e.message : 'Ошибка'),
+          );
+        }
       }
     }
     load();
@@ -67,11 +72,13 @@ export function Trade({
       await onTraded();
       notify(
         side === 'buy'
-          ? `Bought ${quantity} ${fish.symbol}`
-          : `Sold ${quantity} ${fish.symbol}`,
+          ? `Куплено ${quantity} ${fish.symbol}`
+          : `Продано ${quantity} ${fish.symbol}`,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Trade failed');
+      setError(
+        translateError(e instanceof Error ? e.message : 'Сделка не удалась'),
+      );
     } finally {
       setBusy(false);
     }
@@ -80,7 +87,7 @@ export function Trade({
   if (!fish && !error) {
     return (
       <div className="state-box">
-        Loading pair…
+        Загрузка пары…
         <div className="loading-bar" />
       </div>
     );
@@ -91,7 +98,7 @@ export function Trade({
   return (
     <div className="screen">
       <button className="chip ghost-back" type="button" onClick={onBack}>
-        ← Markets
+        ← Рынок
       </button>
 
       {error && <div className="error-box">{error}</div>}
@@ -111,13 +118,13 @@ export function Trade({
                 <MediaSlot className="thumb" label={fishGlyph(fish.symbol)} />
               )}
               <div>
-                <div className="eyebrow">{fish.rarity}</div>
+                <div className="eyebrow">{rarityLabel(fish.rarity)}</div>
                 <h1>{fish.symbol}</h1>
-                <p>{fish.name}</p>
+                <p>{fishName(fish.symbol, fish.name)}</p>
               </div>
             </div>
             <div className="balance-pill">
-              <div className="label">Balance</div>
+              <div className="label">Баланс</div>
               <div className="value">{formatStars(balance)} CR</div>
             </div>
           </div>
@@ -135,8 +142,8 @@ export function Trade({
           </div>
           <p className="supply-meta">
             {formatSupply(fish.availableSupply)} / {formatSupply(fish.totalSupply)}{' '}
-            available
-            {soldOut ? ' · sold out' : ''}
+            в наличии
+            {soldOut ? ' · распродано' : ''}
           </p>
 
           <PriceChart
@@ -147,11 +154,11 @@ export function Trade({
 
           <div className="ticker">
             <div className="ticker-card">
-              <div className="label">ATH</div>
+              <div className="label">Макс.</div>
               <div className="value">{formatStars(fish.allTimeHigh, 2)}</div>
             </div>
             <div className="ticker-card">
-              <div className="label">ATL</div>
+              <div className="label">Мин.</div>
               <div className="value">{formatStars(fish.allTimeLow, 2)}</div>
             </div>
           </div>
@@ -163,19 +170,19 @@ export function Trade({
                 type="button"
                 onClick={() => setSide('buy')}
               >
-                Buy
+                Купить
               </button>
               <button
                 className={`sell ${side === 'sell' ? 'active' : ''}`}
                 type="button"
                 onClick={() => setSide('sell')}
               >
-                Sell
+                Продать
               </button>
             </div>
 
             <div className="section-title" style={{ marginTop: 0 }}>
-              Quantity
+              Количество
             </div>
             <div className="qty-row">
               <input
@@ -199,11 +206,11 @@ export function Trade({
 
             <div className="summary">
               <div className="summary-item">
-                <div className="label">Total</div>
+                <div className="label">Итого</div>
                 <div className="value">{formatStars(total, 2)} CR</div>
               </div>
               <div className="summary-item">
-                <div className="label">Fill</div>
+                <div className="label">Исполнение</div>
                 <div className="value">
                   {formatStars(fish.currentPrice, 2)} × {quantity || 0}
                 </div>
@@ -222,10 +229,10 @@ export function Trade({
               onClick={submit}
             >
               {busy
-                ? 'Submitting…'
+                ? 'Отправка…'
                 : side === 'buy' && soldOut
-                  ? 'Sold out'
-                  : `${side === 'buy' ? 'Buy' : 'Sell'} ${fish.symbol}`}
+                  ? 'Распродано'
+                  : `${side === 'buy' ? 'Купить' : 'Продать'} ${fish.symbol}`}
             </button>
           </div>
         </>

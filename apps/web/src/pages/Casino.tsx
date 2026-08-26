@@ -15,6 +15,13 @@ import {
   type Me,
 } from '../lib/api';
 import { fishGlyph, formatCredits, pnlClass } from '../lib/format';
+import {
+  caseDesc,
+  caseName,
+  fishName,
+  rarityLabel,
+  translateError,
+} from '../lib/labels';
 import { hapticImpact, hapticNotify } from '../lib/telegram';
 
 /** Reel geometry — cell + gap must match CSS. */
@@ -115,7 +122,11 @@ export function Casino({
 
   useEffect(() => {
     load().catch((e) =>
-      setError(e instanceof Error ? e.message : 'Failed to load casino'),
+      setError(
+        translateError(
+          e instanceof Error ? e.message : 'Failed to load',
+        ),
+      ),
     );
   }, [load]);
 
@@ -160,7 +171,7 @@ export function Casino({
     const profit = Number(result.profit ?? 0);
     void hapticNotify(profit >= 0 ? 'success' : 'warning');
     notify(
-      `${result.symbol} · ${formatCredits(result.fishMarketValue)} CR value`,
+      `${fishName(result.symbol, result.name)} · ${formatCredits(result.fishMarketValue)} CR`,
     );
   }
 
@@ -168,7 +179,9 @@ export function Casino({
     if (!selected || busy) return;
     const cost = Number(selected.priceCredits);
     if (balance < cost) {
-      setError(`Need ${formatCredits(cost)} CR — deposit or sell fish first`);
+      setError(
+        `Нужно ${formatCredits(cost)} CR — пополните баланс или продайте рыбу`,
+      );
       void hapticNotify('error');
       return;
     }
@@ -187,7 +200,9 @@ export function Casino({
         cost,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Open failed');
+      setError(
+        translateError(e instanceof Error ? e.message : 'Open failed'),
+      );
       void hapticNotify('error');
       setBusy(false);
       return;
@@ -246,13 +261,13 @@ export function Casino({
       <div className="topbar">
         <div>
           <div className="eyebrow">
-            <span className="live-dot" /> Casino
+            <span className="live-dot" /> Казино
           </div>
-          <h1>Cases</h1>
-          <p>Spend credits · pull fish into your portfolio</p>
+          <h1>Кейсы</h1>
+          <p>Тратьте кредиты · ловите рыбу в портфель</p>
         </div>
         <div className="balance-pill">
-          <div className="label">Balance</div>
+          <div className="label">Баланс</div>
           <div className="value">{formatCredits(me.balance)} CR</div>
         </div>
       </div>
@@ -275,7 +290,7 @@ export function Casino({
               <div className="case-tile-art">
                 <MediaSlot className="crate" label={c.code} />
               </div>
-              <div className="case-tile-name">{c.name}</div>
+              <div className="case-tile-name">{caseName(c.code, c.name)}</div>
               <div className="case-tile-price">
                 {formatCredits(c.priceCredits)} CR
               </div>
@@ -289,12 +304,16 @@ export function Casino({
           <div className="case-head">
             <div>
               <div className="eyebrow">{selected.code}</div>
-              <div className="case-title">{selected.name}</div>
-              <p className="case-desc">{selected.description}</p>
+              <div className="case-title">
+                {caseName(selected.code, selected.name)}
+              </div>
+              <p className="case-desc">
+                {caseDesc(selected.code, selected.description)}
+              </p>
             </div>
             {bestDrop && (
               <div className="case-top-drop">
-                <div className="label">Top drop</div>
+                <div className="label">Топ-дроп</div>
                 <div className={`value ${rarityClass(bestDrop.rarity)}`}>
                   {bestDrop.symbol}
                 </div>
@@ -350,14 +369,16 @@ export function Casino({
                 )}
               </div>
               <div className="win-body">
-                <div className="win-rarity">{reveal.rarity}</div>
+                <div className="win-rarity">{rarityLabel(reveal.rarity)}</div>
                 <div className="win-symbol">{reveal.symbol}</div>
-                <div className="win-name">{reveal.name}</div>
+                <div className="win-name">
+                  {fishName(reveal.symbol, reveal.name)}
+                </div>
                 <div className="win-stats">
-                  <span>Value {formatCredits(reveal.fishMarketValue)} CR</span>
+                  <span>Стоимость {formatCredits(reveal.fishMarketValue)} CR</span>
                   <span className={pnlClass(reveal.profit ?? 0)}>
                     {Number(reveal.profit ?? 0) >= 0 ? '+' : ''}
-                    {formatCredits(reveal.profit ?? 0)} vs cost
+                    {formatCredits(reveal.profit ?? 0)} к цене
                   </span>
                 </div>
               </div>
@@ -371,12 +392,12 @@ export function Casino({
             onClick={openSelected}
           >
             {busy
-              ? 'Rolling…'
+              ? 'Крутим…'
               : !canAfford
-                ? `Need ${formatCredits(Number(selected.priceCredits) - balance)} CR more`
+                ? `Нужно ещё ${formatCredits(Number(selected.priceCredits) - balance)} CR`
                 : reveal
-                  ? `Open again · ${formatCredits(selected.priceCredits)} CR`
-                  : `Open case · ${formatCredits(selected.priceCredits)} CR`}
+                  ? `Открыть ещё · ${formatCredits(selected.priceCredits)} CR`
+                  : `Открыть кейс · ${formatCredits(selected.priceCredits)} CR`}
           </button>
 
           <div className="case-footer">
@@ -386,17 +407,17 @@ export function Casino({
               onClick={() => setFastMode((v) => !v)}
               disabled={busy}
             >
-              Fast open
+              Быстрое открытие
             </button>
             <button
               type="button"
               className={`chip ${showTable ? 'active' : ''}`}
               onClick={() => setShowTable((v) => !v)}
             >
-              Odds
+              Шансы
             </button>
             <span className="case-edge">
-              EV {formatCredits(selected.expectedValue)} · edge{' '}
+              EV {formatCredits(selected.expectedValue)} · маржа{' '}
               {selected.houseEdgePercent}%
             </span>
           </div>
@@ -420,8 +441,8 @@ export function Casino({
                   <div className="row-main">
                     <div className="name">{item.symbol}</div>
                     <div className="meta">
-                      {item.rarity} · {formatCredits(item.marketPrice)} CR
-                      {item.available ? '' : ' · sold out'}
+                      {rarityLabel(item.rarity)} · {formatCredits(item.marketPrice)} CR
+                      {item.available ? '' : ' · распродано'}
                     </div>
                     <div className="odds-bar" aria-hidden>
                       <span
@@ -441,10 +462,10 @@ export function Casino({
         </div>
       )}
 
-      <div className="section-title">Recent opens</div>
+      <div className="section-title">Недавние открытия</div>
       {history.length === 0 && (
         <div className="state-box" style={{ padding: '28px 12px' }}>
-          No opens yet. Pick a case above.
+          Пока пусто. Выберите кейс выше.
         </div>
       )}
       <div className="list">
@@ -460,9 +481,10 @@ export function Casino({
               <MediaSlot className="thumb" label={fishGlyph(o.symbol)} />
             )}
             <div className="row-main">
-              <div className="name">{o.symbol}</div>
+              <div className="name">{fishName(o.symbol, o.name)}</div>
               <div className="meta">
-                {o.caseName} · {new Date(o.createdAt).toLocaleTimeString()}
+                {caseName(o.caseCode, o.caseName)} ·{' '}
+                {new Date(o.createdAt).toLocaleTimeString()}
               </div>
             </div>
             <div className="row-side">

@@ -7,6 +7,7 @@ import {
   formatSupply,
   pnlClass,
 } from '../lib/format';
+import { fishName, translateError } from '../lib/labels';
 import { MediaSlot } from '../components/MediaSlot';
 
 export function Market({
@@ -26,7 +27,11 @@ export function Market({
         const data = await api.fish();
         if (!cancelled) setFish(data);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed');
+        if (!cancelled) {
+          setError(
+            translateError(e instanceof Error ? e.message : 'Ошибка'),
+          );
+        }
       }
     }
     load();
@@ -48,40 +53,40 @@ export function Market({
       <div className="topbar">
         <div>
           <div className="eyebrow">
-            <span className="live-dot" /> Live market
+            <span className="live-dot" /> Живой рынок
           </div>
           <h1>Rare Fish</h1>
-          <p>Limited supply · game credits</p>
+          <p>Ограниченный тираж · игровые кредиты</p>
         </div>
         <div className="balance-pill">
-          <div className="label">Balance</div>
+          <div className="label">Баланс</div>
           <div className="value">{formatStars(me.balance)} CR</div>
         </div>
       </div>
 
-      <MediaSlot label="Banner media" ratio="21 / 9" />
+      <MediaSlot label="Баннер" ratio="21 / 9" />
 
       <div className="ticker" style={{ marginTop: 14 }}>
         <div className="ticker-card">
-          <div className="label">Portfolio</div>
+          <div className="label">Портфель</div>
           <div className="value">{formatStars(me.portfolioValue)} CR</div>
         </div>
         <div className="ticker-card">
-          <div className="label">Listed</div>
+          <div className="label">В листинге</div>
           <div className="value">{fish.length || '—'}</div>
         </div>
       </div>
 
       <div className="market-head">
-        <span>Asset</span>
-        <span>Price</span>
-        <span>Change</span>
+        <span>Актив</span>
+        <span>Цена</span>
+        <span>Изм.</span>
       </div>
 
       {error && <div className="error-box">{error}</div>}
       {!error && fish.length === 0 && (
         <div className="state-box">
-          Loading markets…
+          Загрузка рынка…
           <div className="loading-bar" />
         </div>
       )}
@@ -106,10 +111,10 @@ export function Market({
               <div className="row-main">
                 <div className="name">{f.symbol}</div>
                 <div className="meta">
-                  {f.name}
-                  {f.isFrozen ? ' · frozen' : ''}
+                  {fishName(f.symbol, f.name)}
+                  {f.isFrozen ? ' · фриз' : ''}
                   {' · '}
-                  {formatSupply(left)} left
+                  {formatSupply(left)} ост.
                 </div>
                 <div className="supply-bar" aria-hidden>
                   <span style={{ width: `${pct}%` }} />

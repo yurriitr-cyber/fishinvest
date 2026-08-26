@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type Leaderboard } from '../lib/api';
 import { formatPct, formatStars, pnlClass } from '../lib/format';
+import { translateError } from '../lib/labels';
 
 export function LeaderboardPage() {
   const [data, setData] = useState<Leaderboard | null>(null);
@@ -10,23 +11,25 @@ export function LeaderboardPage() {
     api
       .leaderboard()
       .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed'));
+      .catch((e) =>
+        setError(translateError(e instanceof Error ? e.message : 'Ошибка')),
+      );
   }, []);
 
   return (
     <div className="screen">
       <div className="topbar">
         <div>
-          <div className="eyebrow">Leaderboard</div>
-          <h1>Whales</h1>
-          <p>Ranked by portfolio equity</p>
+          <div className="eyebrow">Рейтинг</div>
+          <h1>Киты</h1>
+          <p>Ранг по стоимости портфеля</p>
         </div>
       </div>
 
       {error && <div className="error-box">{error}</div>}
       {!data && !error && (
         <div className="state-box">
-          Loading rankings…
+          Загрузка рейтинга…
           <div className="loading-bar" />
         </div>
       )}
@@ -34,8 +37,8 @@ export function LeaderboardPage() {
       {data && (
         <>
           <div className="market-head">
-            <span>Trader</span>
-            <span>Equity</span>
+            <span>Трейдер</span>
+            <span>Капитал</span>
             <span>P/L</span>
           </div>
           <div className="list">
@@ -45,7 +48,7 @@ export function LeaderboardPage() {
                 <div className="row-main">
                   <div className="name">
                     {row.displayName}
-                    {row.isYou ? ' · you' : ''}
+                    {row.isYou ? ' · вы' : ''}
                   </div>
                   <div className="meta">P/L {formatPct(row.profitPercent)}</div>
                 </div>
@@ -63,7 +66,7 @@ export function LeaderboardPage() {
 
           {data.you && !data.leaders.some((l) => l.isYou) && (
             <>
-              <div className="section-title">Your rank</div>
+              <div className="section-title">Ваш ранг</div>
               <div className="row" style={{ cursor: 'default' }}>
                 <div className="glyph rank">{data.you.rank}</div>
                 <div className="row-main">
@@ -82,7 +85,9 @@ export function LeaderboardPage() {
           )}
 
           {data.leaders.length === 0 && (
-            <div className="state-box">No portfolios yet. Trade to climb.</div>
+            <div className="state-box">
+              Портфелей пока нет. Торгуйте, чтобы подняться.
+            </div>
           )}
         </>
       )}

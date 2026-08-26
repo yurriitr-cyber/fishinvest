@@ -228,11 +228,11 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
 
     const invoiceLink = await this.createInvoiceLink({
       botToken,
-      title: 'Rare Fish game credits',
+      title: 'Кредиты Rare Fish',
       description:
         Number(quote.feePercent) > 0
-          ? `${quote.gameCreditAmount} game credits (after ${quote.feePercent}% fee)`
-          : `${quote.gameCreditAmount} game credits (1★ = 1 credit)`,
+          ? `${quote.gameCreditAmount} игровых кредитов (после комиссии ${quote.feePercent}%)`
+          : `${quote.gameCreditAmount} игровых кредитов (1★ = 1 кредит)`,
       payload: deposit.id,
       starAmount,
     });
@@ -688,7 +688,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
           payload: params.payload,
           provider_token: '',
           currency: 'XTR',
-          prices: [{ label: 'Game credits', amount: params.starAmount }],
+          prices: [{ label: 'Игровые кредиты', amount: params.starAmount }],
         }),
       },
     );

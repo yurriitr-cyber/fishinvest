@@ -22,7 +22,7 @@ function Icon({ children }: { children: ReactNode }) {
 const ITEMS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
   {
     id: 'market',
-    label: 'Markets',
+    label: 'Рынок',
     icon: (
       <Icon>
         <path d="M3 16.5 8 11l3.5 3.5L21 5" />
@@ -32,7 +32,7 @@ const ITEMS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
   },
   {
     id: 'portfolio',
-    label: 'Assets',
+    label: 'Активы',
     icon: (
       <Icon>
         <path d="M12 3.5 21 8l-9 4.5L3 8l9-4.5Z" />
@@ -43,7 +43,7 @@ const ITEMS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
   },
   {
     id: 'deposit',
-    label: 'Deposit',
+    label: 'Депозит',
     icon: (
       <Icon>
         <path d="M12 3.5v11" />
@@ -54,7 +54,7 @@ const ITEMS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
   },
   {
     id: 'casino',
-    label: 'Casino',
+    label: 'Кейсы',
     icon: (
       <Icon>
         <rect x="4" y="6" width="16" height="12" rx="2" />
@@ -64,7 +64,7 @@ const ITEMS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
   },
   {
     id: 'invite',
-    label: 'Invite',
+    label: 'Друзья',
     icon: (
       <Icon>
         <circle cx="9" cy="8.5" r="3.5" />

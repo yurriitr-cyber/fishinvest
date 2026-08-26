@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { api, type Me } from './lib/api';
+import { translateError } from './lib/labels';
 import { BottomNav, type Tab } from './components/BottomNav';
 import { Welcome } from './pages/Welcome';
 import { Market } from './pages/Market';
@@ -33,7 +34,11 @@ export default function App() {
         if (data.isNewUser) setShowWelcome(true);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load');
+          setError(
+            translateError(
+              e instanceof Error ? e.message : 'Не удалось загрузить',
+            ),
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -56,7 +61,7 @@ export default function App() {
 
   async function onTraded() {
     await refreshMe();
-    notify('Order filled');
+    notify('Сделка исполнена');
   }
 
   let body: ReactNode;
@@ -64,21 +69,21 @@ export default function App() {
   if (loading) {
     body = (
       <div className="state-box">
-        Connecting to exchange…
+        Подключение к бирже…
         <div className="loading-bar" />
       </div>
     );
   } else if (error || !me) {
     body = (
       <div className="screen">
-        <div className="eyebrow">Offline</div>
+        <div className="eyebrow">Нет связи</div>
         <h1 className="brand">
           Rare Fish
           <span>Investment</span>
         </h1>
-        <div className="error-box">{error || 'Unavailable'}</div>
+        <div className="error-box">{error || 'Недоступно'}</div>
         <p className="lede">
-          Check that API is online, then reopen the Mini App.
+          Проверьте, что API работает, и откройте Mini App снова.
         </p>
       </div>
     );
@@ -121,7 +126,7 @@ export default function App() {
             me={me}
             onCredited={async () => {
               await refreshMe();
-              notify('Deposit confirmed. Credits added.');
+              notify('Депозит подтверждён. Кредиты зачислены.');
             }}
           />
         );

@@ -8,6 +8,7 @@ import {
   type TonQuote,
 } from '../lib/api';
 import { formatStars } from '../lib/format';
+import { depositStatus, translateError } from '../lib/labels';
 
 async function openTelegramInvoice(
   invoiceLink: string,
@@ -79,7 +80,9 @@ export function Deposit({
     api
       .depositMethods()
       .then(setMethods)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed'));
+      .catch((e) =>
+        setError(translateError(e instanceof Error ? e.message : 'Ошибка')),
+      );
   }, []);
 
   useEffect(() => {
@@ -98,7 +101,13 @@ export function Deposit({
           }
         })
         .catch((e) => {
-          if (!cancelled) setError(e instanceof Error ? e.message : 'Quote failed');
+          if (!cancelled) {
+            setError(
+              translateError(
+                e instanceof Error ? e.message : 'Quote failed',
+              ),
+            );
+          }
         });
     }, 220);
     return () => {
@@ -124,7 +133,11 @@ export function Deposit({
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'TON quote failed');
+          setError(
+            translateError(
+              e instanceof Error ? e.message : 'Quote failed',
+            ),
+          );
         }
       }
     }
@@ -141,7 +154,7 @@ export function Deposit({
 
   async function watchTonDeposit(depositId: string, token: number) {
     setTonPhase('awaiting');
-    setStatusMsg('Open your wallet, send the exact amount with the memo…');
+    setStatusMsg('Откройте кошелёк и отправьте точную сумму с мемо…');
 
     const delays = [1000, 2000, 2000, 2500, 2500, 4000, 8000];
     let elapsed = 0;
@@ -152,8 +165,8 @@ export function Deposit({
       setTonPhase('checking');
       setStatusMsg(
         elapsed <= 10_000
-          ? `Checking payment… (${Math.round(elapsed / 1000)}s)`
-          : 'Still checking the blockchain…',
+          ? `Проверяем оплату… (${Math.round(elapsed / 1000)} с)`
+          : 'Всё ещё проверяем блокчейн…',
       );
       try {
         const fresh = await api.checkTonDeposit(depositId);
@@ -162,34 +175,34 @@ export function Deposit({
         if (fresh.status === 'CONFIRMED') {
           setTonPhase('credited');
           setStatusMsg(
-            `Credits received: +${formatStars(fresh.gameCreditAmount || '0')} CR.`,
+            `Кредиты зачислены: +${formatStars(fresh.gameCreditAmount || '0')} CR.`,
           );
           await onCredited?.();
           return;
         }
         if (fresh.status === 'CANCELLED' || fresh.status === 'FAILED') {
           setTonPhase('failed');
-          setStatusMsg('Deposit expired or failed. Create a new one.');
+          setStatusMsg('Депозит истёк или не удался. Создайте новый.');
           return;
         }
         if (elapsed >= 10_000) {
           setTonPhase('pending');
           setStatusMsg(
-            'Not credited within 10 seconds. If you already sent TON, wait a bit or tap Check now.',
+            'Не зачислено за 10 секунд. Если вы уже отправили TON, подождите или нажмите «Проверить».',
           );
         } else {
           setTonPhase('awaiting');
-          setStatusMsg('Payment not seen yet — keep the memo exact.');
+          setStatusMsg('Оплата ещё не видна — мемо должно совпадать точно.');
         }
       } catch {
-        setStatusMsg('Network hiccup while checking. Retrying…');
+        setStatusMsg('Сбой сети при проверке. Повторяем…');
       }
     }
 
     if (watchRef.current !== token) return;
     setTonPhase('pending');
     setStatusMsg(
-      'Still not credited. Confirm amount + memo in your wallet, then Check now.',
+      'Всё ещё не зачислено. Проверьте сумму и мемо в кошельке, затем «Проверить».',
     );
   }
 
@@ -216,12 +229,14 @@ export function Deposit({
           }
         }
       } else if (status === 'cancelled') {
-        setError('Payment cancelled.');
+        setError('Оплата отменена.');
       } else if (status === 'unavailable') {
-        setError('Open this Mini App inside Telegram to pay with Stars.');
+        setError('Откройте Mini App внутри Telegram, чтобы оплатить Stars.');
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Deposit failed');
+      setError(
+        translateError(e instanceof Error ? e.message : 'Deposit failed'),
+      );
     } finally {
       setBusy(false);
     }
@@ -247,7 +262,9 @@ export function Deposit({
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'TON deposit failed');
+      setError(
+        translateError(e instanceof Error ? e.message : 'Deposit failed'),
+      );
       setTonPhase('failed');
     } finally {
       setBusy(false);
@@ -265,23 +282,27 @@ export function Deposit({
   async function checkNow() {
     if (!lastDeposit || lastDeposit.provider !== 'TON') return;
     setTonPhase('checking');
-    setStatusMsg('Checking the blockchain…');
+    setStatusMsg('Проверяем блокчейн…');
     try {
       const fresh = await api.checkTonDeposit(lastDeposit.id);
       setLastDeposit(fresh);
       if (fresh.status === 'CONFIRMED') {
         setTonPhase('credited');
         setStatusMsg(
-          `Credited +${formatStars(fresh.gameCreditAmount || '0')} CR to your balance.`,
+          `Зачислено +${formatStars(fresh.gameCreditAmount || '0')} CR на баланс.`,
         );
         await onCredited?.();
       } else {
         setTonPhase('pending');
-        setStatusMsg('Payment not found yet. Confirm amount + memo, then retry.');
+        setStatusMsg(
+          'Оплата ещё не найдена. Проверьте сумму и мемо, затем повторите.',
+        );
       }
     } catch (e) {
       setTonPhase('failed');
-      setStatusMsg(e instanceof Error ? e.message : 'Check failed');
+      setStatusMsg(
+        translateError(e instanceof Error ? e.message : 'Ошибка проверки'),
+      );
     }
   }
 
@@ -292,12 +313,12 @@ export function Deposit({
     <div className="screen">
       <div className="topbar">
         <div>
-          <div className="eyebrow">Top up</div>
-          <h1>Deposit</h1>
-          <p>Stars or TON → game credits</p>
+          <div className="eyebrow">Пополнение</div>
+          <h1>Депозит</h1>
+          <p>Stars или TON → игровые кредиты</p>
         </div>
         <div className="balance-pill">
-          <div className="label">Balance</div>
+          <div className="label">Баланс</div>
           <div className="value">{formatStars(me.balance)} CR</div>
         </div>
       </div>
@@ -318,14 +339,14 @@ export function Deposit({
           onClick={() => setChannel('ton')}
           disabled={!tonMethod?.enabled}
         >
-          TON{!tonMethod?.enabled ? ' · soon' : ''}
+          TON{!tonMethod?.enabled ? ' · скоро' : ''}
         </button>
       </div>
 
       {channel === 'stars' && starsMethod?.enabled && (
         <div className="trade-panel">
           <div className="section-title" style={{ marginTop: 0 }}>
-            Amount
+            Сумма
           </div>
           <div className="qty-presets">
             {packs.map((n) => (
@@ -342,10 +363,10 @@ export function Deposit({
           <div className="qty-row">
             <input
               inputMode="numeric"
-              placeholder="Custom Stars amount"
+              placeholder="Своя сумма Stars"
               value={starsInput}
               onChange={(e) => setStarsInput(e.target.value.replace(/[^\d]/g, ''))}
-              aria-label="Stars amount"
+              aria-label="Сумма Stars"
             />
           </div>
           <p className="amount-hint">1–50 000 Stars · 1 Star = 1 CR</p>
@@ -353,11 +374,11 @@ export function Deposit({
           {quote && selected && (
             <div className="summary">
               <div className="summary-item">
-                <div className="label">You pay</div>
+                <div className="label">К оплате</div>
                 <div className="value">{selected} Stars</div>
               </div>
               <div className="summary-item">
-                <div className="label">You receive</div>
+                <div className="label">Вы получите</div>
                 <div className="value">{formatStars(quote.gameCreditAmount)} CR</div>
               </div>
             </div>
@@ -370,10 +391,10 @@ export function Deposit({
             onClick={payStars}
           >
             {busy
-              ? 'Opening invoice…'
+              ? 'Открываем счёт…'
               : selected
-                ? `Pay ${selected} Stars`
-                : 'Enter amount'}
+                ? `Оплатить ${selected} Stars`
+                : 'Введите сумму'}
           </button>
         </div>
       )}
@@ -381,7 +402,7 @@ export function Deposit({
       {channel === 'ton' && tonMethod?.enabled && (
         <div className="trade-panel">
           <div className="section-title" style={{ marginTop: 0 }}>
-            Amount (TON)
+            Сумма (TON)
           </div>
           <div className="qty-presets">
             {tonPacks.map((n) => (
@@ -398,7 +419,7 @@ export function Deposit({
           <div className="qty-row">
             <input
               inputMode="decimal"
-              placeholder="Custom TON amount"
+              placeholder="Своя сумма TON"
               value={tonInput}
               onChange={(e) => {
                 const next = e.target.value.replace(',', '.');
@@ -406,10 +427,10 @@ export function Deposit({
                   setTonInput(next);
                 }
               }}
-              aria-label="TON amount"
+              aria-label="Сумма TON"
             />
           </div>
-          <p className="amount-hint">0.05–500 TON · live market rate</p>
+          <p className="amount-hint">0.05–500 TON · живой рыночный курс</p>
 
           {tonQuote && tonSelected && (
             <div className="summary">
@@ -428,13 +449,13 @@ export function Deposit({
                 </div>
               </div>
               <div className="summary-item">
-                <div className="label">You receive</div>
+                <div className="label">Вы получите</div>
                 <div className="value">
                   {formatStars(tonQuote.gameCreditAmount)} CR
                 </div>
               </div>
               <div className="summary-item">
-                <div className="label">Bonus</div>
+                <div className="label">Бонус</div>
                 <div className="value">
                   +{Number(tonQuote.bonusPercent ?? 15).toFixed(0)}%
                 </div>
@@ -443,7 +464,7 @@ export function Deposit({
           )}
           {tonQuote?.rateSource && (
             <p className="amount-hint">
-              Rate · {tonQuote.rateSource}
+              Курс · {tonQuote.rateSource}
               {tonQuote.rateFetchedAt
                 ? ` · ${new Date(tonQuote.rateFetchedAt).toLocaleTimeString()}`
                 : ''}
@@ -457,10 +478,10 @@ export function Deposit({
             onClick={payTon}
           >
             {busy
-              ? 'Creating…'
+              ? 'Создаём…'
               : tonSelected
-                ? `Pay ${tonSelected} TON`
-                : 'Enter amount'}
+                ? `Оплатить ${tonSelected} TON`
+                : 'Введите сумму'}
           </button>
 
           {lastDeposit?.provider === 'TON' && (
@@ -473,23 +494,23 @@ export function Deposit({
                     : 'wait'
               }`}
             >
-              <div className="label">Deposit status</div>
+              <div className="label">Статус депозита</div>
               <div className="title">
                 {tonPhase === 'credited'
-                  ? 'Credited'
+                  ? 'Зачислено'
                   : tonPhase === 'checking'
-                    ? 'Checking…'
+                    ? 'Проверяем…'
                     : tonPhase === 'failed'
-                      ? 'Not credited'
+                      ? 'Не зачислено'
                       : tonPhase === 'pending'
-                        ? 'Still waiting'
-                        : 'Awaiting payment'}
+                        ? 'Всё ещё ждём'
+                        : 'Ожидание оплаты'}
               </div>
               <p className="detail">{statusMsg}</p>
               {lastDeposit.status !== 'CONFIRMED' && (
                 <>
                   <p className="detail" style={{ marginTop: 8 }}>
-                    Send <strong>{lastDeposit.assetAmount} TON</strong> with memo{' '}
+                    Отправьте <strong>{lastDeposit.assetAmount} TON</strong> с мемо{' '}
                     <strong>{lastDeposit.memo}</strong>
                   </p>
                   <div className="actions">
@@ -499,7 +520,7 @@ export function Deposit({
                         className="btn btn-outline"
                         onClick={() => copy(lastDeposit.depositAddress || '')}
                       >
-                        Copy address
+                        Копировать адрес
                       </button>
                     )}
                     {lastDeposit.memo && (
@@ -508,7 +529,7 @@ export function Deposit({
                         className="btn btn-outline"
                         onClick={() => copy(lastDeposit.memo || '')}
                       >
-                        Copy memo
+                        Копировать мемо
                       </button>
                     )}
                     <button
@@ -516,7 +537,7 @@ export function Deposit({
                       className="btn btn-solid"
                       onClick={checkNow}
                     >
-                      Check now
+                      Проверить
                     </button>
                   </div>
                 </>
@@ -530,12 +551,12 @@ export function Deposit({
         <div
           className={`status-card ${lastDeposit.status === 'CONFIRMED' ? 'ok' : 'wait'}`}
         >
-          <div className="label">Stars deposit</div>
-          <div className="title">{lastDeposit.status}</div>
+          <div className="label">Депозит Stars</div>
+          <div className="title">{depositStatus(lastDeposit.status)}</div>
           <p className="detail">
             {lastDeposit.status === 'CONFIRMED'
-              ? `Credited +${formatStars(lastDeposit.gameCreditAmount || '0')} CR`
-              : `Order ${lastDeposit.id.slice(0, 8)}…`}
+              ? `Зачислено +${formatStars(lastDeposit.gameCreditAmount || '0')} CR`
+              : `Заказ ${lastDeposit.id.slice(0, 8)}…`}
           </p>
         </div>
       )}

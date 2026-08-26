@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { MediaSlot } from '../components/MediaSlot';
 import { api, type Me, type ReferralStats } from '../lib/api';
 import { formatStars } from '../lib/format';
+import { translateError } from '../lib/labels';
 import { hapticImpact } from '../lib/telegram';
 
 export function Referrals({
@@ -18,14 +19,18 @@ export function Referrals({
     api
       .referrals()
       .then(setStats)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed'));
+      .catch((e) =>
+        setError(
+          translateError(e instanceof Error ? e.message : 'Ошибка'),
+        ),
+      );
   }, []);
 
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(me.referralLink);
       void hapticImpact('light');
-      notify('Invite link copied');
+      notify('Ссылка скопирована');
     } catch {
       notify(me.referralLink);
     }
@@ -33,7 +38,7 @@ export function Referrals({
 
   function shareLink() {
     const text = encodeURIComponent(
-      'Join me on Rare Fish — we both get bonus credits.',
+      'Заходи в Rare Fish — нам обоим начислят бонусные кредиты.',
     );
     const url = encodeURIComponent(me.referralLink);
     const shareUrl = `https://t.me/share/url?url=${url}&text=${text}`;
@@ -45,19 +50,19 @@ export function Referrals({
     <div className="screen">
       <div className="topbar">
         <div>
-          <div className="eyebrow">Growth</div>
-          <h1>Invite</h1>
-          <p>You +300 CR · Friend +50 CR</p>
+          <div className="eyebrow">Рост</div>
+          <h1>Друзья</h1>
+          <p>Вам +300 CR · другу +50 CR</p>
         </div>
       </div>
 
       <div className="ticker">
         <div className="ticker-card">
-          <div className="label">Friends</div>
+          <div className="label">Друзья</div>
           <div className="value">{stats?.count ?? '—'}</div>
         </div>
         <div className="ticker-card">
-          <div className="label">Earned</div>
+          <div className="label">Заработано</div>
           <div className="value">
             {stats ? `${formatStars(stats.totalBonusEarned)} CR` : '—'}
           </div>
@@ -65,7 +70,7 @@ export function Referrals({
       </div>
 
       <div className="trade-panel" style={{ marginBottom: 14 }}>
-        <div className="eyebrow">Your link</div>
+        <div className="eyebrow">Ваша ссылка</div>
         <div
           style={{
             marginTop: 8,
@@ -78,8 +83,8 @@ export function Referrals({
           {me.referralLink}
         </div>
         <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-          Friend opens the link → taps Open in the bot → both bonuses land.
-          Your own link never pays out to you.
+          Друг открывает ссылку → жмёт «Открыть» в боте → бонусы начисляются
+          обоим. По своей ссылке себе бонус не приходит.
         </p>
       </div>
 
@@ -90,7 +95,7 @@ export function Referrals({
           style={{ flex: 1 }}
           onClick={shareLink}
         >
-          Share in Telegram
+          Поделиться в Telegram
         </button>
         <button
           className="btn"
@@ -98,23 +103,23 @@ export function Referrals({
           style={{ flex: 1 }}
           onClick={copyLink}
         >
-          Copy link
+          Скопировать
         </button>
       </div>
 
       {error && <div className="error-box">{error}</div>}
 
-      <div className="section-title">Recent joins</div>
+      <div className="section-title">Недавние приглашения</div>
       <div className="list">
         {(stats?.referrals || []).map((r) => (
           <div key={r.id} className="row" style={{ cursor: 'default' }}>
             <MediaSlot className="thumb" label="INV" />
             <div className="row-main">
               <div className="name">
-                {r.username || r.firstName || 'Friend'}
+                {r.username || r.firstName || 'Друг'}
               </div>
               <div className="meta">
-                {new Date(r.joinedAt).toLocaleDateString()}
+                {new Date(r.joinedAt).toLocaleDateString('ru-RU')}
               </div>
             </div>
             <div className="row-side">
@@ -125,7 +130,7 @@ export function Referrals({
       </div>
 
       {stats && stats.referrals.length === 0 && (
-        <div className="state-box">No invites yet. Share your link.</div>
+        <div className="state-box">Пока никого. Поделитесь ссылкой.</div>
       )}
     </div>
   );

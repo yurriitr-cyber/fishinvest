@@ -94,7 +94,7 @@ export function PriceChart({
   return (
     <div className={`chart-card ${up ? 'up' : 'down'}`}>
       <div className="chart-meta">
-        <span className="label">Price</span>
+        <span className="label">Цена</span>
         <span className={`chg ${pnlClass(change)}`}>
           {change >= 0 ? '+' : ''}
           {change.toFixed(2)}%
@@ -135,8 +135,8 @@ export function PriceChart({
         )}
       </svg>
       <div className="chart-range mono">
-        <span>L {formatStars(min, 2)}</span>
-        <span>H {formatStars(max, 2)}</span>
+        <span>Мин {formatStars(min, 2)}</span>
+        <span>Макс {formatStars(max, 2)}</span>
       </div>
     </div>
   );

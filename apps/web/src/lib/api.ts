@@ -1,3 +1,5 @@
+import { translateError } from './labels';
+
 export type Me = {
   id: string;
   telegramId: string;
@@ -247,14 +249,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const res = await fetch(`${API_BASE}/api${path}`, { ...init, headers });
   if (!res.ok) {
-    let message: string | string[] = `Request failed (${res.status})`;
+    let message: string | string[] = `Ошибка запроса (${res.status})`;
     try {
       const body = await res.json();
       message = body.message || body.error || message;
     } catch {
       /* ignore */
     }
-    throw new Error(Array.isArray(message) ? message.join(', ') : String(message));
+    const text = Array.isArray(message) ? message.join(', ') : String(message);
+    throw new Error(translateError(text));
   }
   return res.json() as Promise<T>;
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type Me, type Portfolio } from '../lib/api';
 import { MediaSlot } from '../components/MediaSlot';
 import { fishGlyph, formatPct, formatStars, pnlClass } from '../lib/format';
+import { translateError } from '../lib/labels';
 
 export function PortfolioPage({
   me,
@@ -17,19 +18,23 @@ export function PortfolioPage({
     api
       .portfolio()
       .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed'));
+      .catch((e) =>
+        setError(
+          translateError(e instanceof Error ? e.message : 'Ошибка'),
+        ),
+      );
   }, [me.balance, me.portfolioValue]);
 
   return (
     <div className="screen">
       <div className="topbar">
         <div>
-          <div className="eyebrow">Overview</div>
-          <h1>Assets</h1>
-          <p>Positions · unrealized P/L</p>
+          <div className="eyebrow">Обзор</div>
+          <h1>Активы</h1>
+          <p>Позиции · нереализ. P/L</p>
         </div>
         <div className="balance-pill">
-          <div className="label">Cash</div>
+          <div className="label">Кэш</div>
           <div className="value">{formatStars(me.balance)} CR</div>
         </div>
       </div>
@@ -40,40 +45,42 @@ export function PortfolioPage({
         <>
           <div className="ticker">
             <div className="ticker-card">
-              <div className="label">Equity</div>
+              <div className="label">Капитал</div>
               <div className="value">{formatStars(data.currentValue)} CR</div>
             </div>
             <div className="ticker-card">
-              <div className="label">Invested</div>
+              <div className="label">Вложено</div>
               <div className="value">{formatStars(data.totalInvested)} CR</div>
             </div>
           </div>
 
           <div className="summary">
             <div className="summary-item">
-              <div className="label">Unrealized</div>
+              <div className="label">Нереализ.</div>
               <div className={`value ${pnlClass(data.unrealizedPnl)}`}>
                 {formatStars(data.unrealizedPnl)} ·{' '}
                 {formatPct(data.unrealizedPnlPercent)}
               </div>
             </div>
             <div className="summary-item">
-              <div className="label">Realized</div>
+              <div className="label">Реализ.</div>
               <div className={`value ${pnlClass(data.realizedPnl)}`}>
                 {formatStars(data.realizedPnl)} CR
               </div>
             </div>
           </div>
 
-          <div className="section-title">Positions</div>
+          <div className="section-title">Позиции</div>
           <div className="market-head">
-            <span>Asset</span>
-            <span>Value</span>
+            <span>Актив</span>
+            <span>Стоим.</span>
             <span>P/L</span>
           </div>
 
           {data.positions.length === 0 && (
-            <div className="state-box">No open positions. Buy on Markets.</div>
+            <div className="state-box">
+              Нет открытых позиций. Купите на рынке.
+            </div>
           )}
           <div className="list">
             {data.positions.map((p) => (
@@ -91,7 +98,7 @@ export function PortfolioPage({
                 <div className="row-main">
                   <div className="name">{p.symbol}</div>
                   <div className="meta">
-                    qty {p.quantity} · avg {formatStars(p.avgBuyPrice, 2)}
+                    кол-во {p.quantity} · ср. {formatStars(p.avgBuyPrice, 2)}
                   </div>
                 </div>
                 <div className="row-side">

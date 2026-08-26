@@ -1,7 +1,7 @@
 export function formatStars(value: string | number, digits = 0) {
   const n = typeof value === 'string' ? Number(value) : value;
   if (!Number.isFinite(n)) return '—';
-  return n.toLocaleString('en-US', {
+  return n.toLocaleString('ru-RU', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
@@ -13,7 +13,7 @@ export function formatCredits(value: string | number) {
   if (!Number.isFinite(n)) return '—';
   const abs = Math.abs(n);
   const digits = abs >= 100 ? 0 : abs >= 1 ? 2 : 4;
-  return n.toLocaleString('en-US', {
+  return n.toLocaleString('ru-RU', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });

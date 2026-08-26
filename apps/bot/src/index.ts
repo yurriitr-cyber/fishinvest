@@ -47,11 +47,11 @@ function openAppKeyboard(startParam?: string) {
     : webAppUrl;
 
   if (url.startsWith('https://')) {
-    return new InlineKeyboard().webApp('🐟 Open Rare Fish Market', url);
+    return new InlineKeyboard().webApp('🐟 Открыть Rare Fish Market', url);
   }
 
   return new InlineKeyboard().url(
-    '🐟 Open Mini App (set WEBAPP_URL to https)',
+    '🐟 Открыть Mini App (нужен WEBAPP_URL https)',
     startParam
       ? `https://t.me/${botUsername}?start=${encodeURIComponent(startParam)}`
       : `https://t.me/${botUsername}`,
@@ -90,14 +90,14 @@ bot.command('start', async (ctx) => {
       '*Rare Fish Investment*',
       '',
       isInvite
-        ? 'You were invited — tap below to claim your *+50 CR* join bonus.'
-        : 'A simulated aquarium market.',
+        ? 'Вас пригласили — нажмите ниже, чтобы получить бонус *+50 CR*.'
+        : 'Симулированный аквариумный рынок.',
       isInvite
-        ? 'Your friend gets *+300 CR* when you open the app.'
-        : 'You get *200 game ⭐* to start.',
-      isInvite ? '' : 'Invite a friend: they get *+50*, you get *+300*.',
+        ? 'Ваш друг получит *+300 CR*, когда вы откроете приложение.'
+        : 'Стартовый баланс — *200 игровых ⭐*.',
+      isInvite ? '' : 'Пригласите друга: ему *+50*, вам *+300*.',
       '',
-      '_Game credits are not real Telegram Stars._',
+      '_Игровые кредиты — это не настоящие Telegram Stars._',
     ]
       .filter((line) => line !== undefined)
       .join('\n'),
@@ -109,18 +109,18 @@ bot.command('start', async (ctx) => {
 });
 
 bot.command('app', async (ctx) => {
-  await ctx.reply('Dive in.', { reply_markup: openAppKeyboard() });
+  await ctx.reply('Вперёд.', { reply_markup: openAppKeyboard() });
 });
 
 bot.command('help', async (ctx) => {
   await ctx.reply(
     [
-      'Commands:',
-      '/start — welcome + open Mini App',
-      '/app — open market',
-      '/help — this message',
+      'Команды:',
+      '/start — приветствие + открыть Mini App',
+      '/app — открыть рынок',
+      '/help — это сообщение',
       '',
-      'Share your invite link from the Invite tab inside the app.',
+      'Ссылку для приглашения можно скопировать во вкладке «Друзья» в приложении.',
     ].join('\n'),
   );
 });
@@ -138,12 +138,12 @@ bot.on('pre_checkout_query', async (ctx) => {
     );
     await ctx.answerPreCheckoutQuery(result.ok, result.ok
       ? undefined
-      : 'Deposit expired or invalid. Open the app and try again.');
+      : 'Депозит истёк или недействителен. Откройте приложение и попробуйте снова.');
   } catch (err) {
     console.error('pre_checkout failed', err);
     await ctx.answerPreCheckoutQuery(
       false,
-      'Payment verification temporarily unavailable.',
+      'Проверка оплаты временно недоступна.',
     );
   }
 });
@@ -167,16 +167,16 @@ bot.on('message:successful_payment', async (ctx) => {
 
     await ctx.reply(
       [
-        '✅ Payment received.',
-        `+${confirmed.gameCreditAmount ?? '?'} game credits credited.`,
-        'Open the market and buy more fish.',
+        '✅ Оплата получена.',
+        `+${confirmed.gameCreditAmount ?? '?'} игровых кредитов зачислено.`,
+        'Откройте рынок и купите ещё рыбы.',
       ].join('\n'),
       { reply_markup: openAppKeyboard() },
     );
   } catch (err) {
     console.error('successful_payment handling failed', err);
     await ctx.reply(
-      'Payment received, but crediting failed. Contact support with your payment receipt.',
+      'Оплата получена, но зачисление не удалось. Напишите в поддержку с чеком оплаты.',
     );
   }
 });
