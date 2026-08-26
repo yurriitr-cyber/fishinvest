@@ -33,6 +33,8 @@ export default function App() {
   const [targets, setTargets] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
+  const [balanceInput, setBalanceInput] = useState('');
+  const [balanceReason, setBalanceReason] = useState('admin top-up');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [oracle, setOracle] = useState<Record<string, unknown> | null>(null);
@@ -437,7 +439,16 @@ export default function App() {
                   <div className="actions">
                     <button
                       type="button"
-                      onClick={async () => setSelectedUser(await adminApi.user(u.id))}
+                      onClick={async () => {
+                        const detail = await adminApi.user(u.id);
+                        setSelectedUser(detail);
+                        setBalanceInput(
+                          String(Number(detail.gameBalance?.available ?? 0)),
+                        );
+                        setBalanceReason('admin top-up');
+                        setOkMsg(null);
+                        setError(null);
+                      }}
                     >
                       Open
                     </button>
@@ -459,22 +470,117 @@ export default function App() {
             {selectedUser && (
               <div className="panel">
                 <h2>
-                  User · {selectedUser.username || selectedUser.firstName}
+                  User · {selectedUser.username || selectedUser.firstName || '—'}
                 </h2>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={async () => {
-                    const amount = Number(prompt('Adjust amount (+/-)', '50'));
-                    if (!Number.isFinite(amount) || amount === 0) return;
-                    const reason = prompt('Reason', 'admin top-up') || 'admin';
-                    setSelectedUser(
-                      await adminApi.adjustBalance(selectedUser.id, amount, reason),
-                    );
-                  }}
-                >
-                  Adjust balance
-                </button>
+                <p className="muted" style={{ marginBottom: 12 }}>
+                  tg {String(selectedUser.telegramId)} · status {selectedUser.status}
+                  {selectedUser.isAdmin ? ' · admin' : ''}
+                </p>
+                <div className="stat" style={{ marginBottom: 14, maxWidth: 220 }}>
+                  <div className="label">Current balance</div>
+                  <div className="value">
+                    {n(selectedUser.gameBalance?.available)} CR
+                  </div>
+                </div>
+
+                <div className="toolbar" style={{ alignItems: 'flex-end' }}>
+                  <label style={{ display: 'grid', gap: 4, flex: 1 }}>
+                    <span className="muted">Set balance to</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      placeholder="3000"
+                      value={balanceInput}
+                      onChange={(e) => setBalanceInput(e.target.value)}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4, flex: 1 }}>
+                    <span className="muted">Reason</span>
+                    <input
+                      value={balanceReason}
+                      onChange={(e) => setBalanceReason(e.target.value)}
+                      placeholder="admin top-up"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={busy}
+                    onClick={async () => {
+                      const balance = Number(balanceInput);
+                      if (!Number.isFinite(balance) || balance < 0) {
+                        setError('Enter a valid balance ≥ 0');
+                        return;
+                      }
+                      const reason = balanceReason.trim() || 'admin set-balance';
+                      setBusy(true);
+                      setError(null);
+                      setOkMsg(null);
+                      try {
+                        const updated = await adminApi.setBalance(
+                          selectedUser.id,
+                          balance,
+                          reason,
+                        );
+                        setSelectedUser(updated);
+                        setBalanceInput(String(balance));
+                        setUsers(await adminApi.users(q || undefined));
+                        setOkMsg(
+                          `Balance set to ${n(updated.gameBalance?.available)} CR`,
+                        );
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : 'Set balance failed');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Set balance
+                  </button>
+                </div>
+
+                <div className="actions" style={{ marginTop: 12 }}>
+                  {[100, 500, 1000, 3000].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setBalanceInput(String(amt))}
+                    >
+                      {amt}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const amount = Number(prompt('Adjust amount (+/-)', '50'));
+                      if (!Number.isFinite(amount) || amount === 0) return;
+                      const reason =
+                        prompt('Reason', 'admin adjust') || 'admin adjust';
+                      setBusy(true);
+                      try {
+                        const updated = await adminApi.adjustBalance(
+                          selectedUser.id,
+                          amount,
+                          reason,
+                        );
+                        setSelectedUser(updated);
+                        setUsers(await adminApi.users(q || undefined));
+                        setOkMsg(
+                          `Adjusted by ${amount > 0 ? '+' : ''}${amount} → ${n(updated.gameBalance?.available)} CR`,
+                        );
+                      } catch (e) {
+                        setError(
+                          e instanceof Error ? e.message : 'Adjust failed',
+                        );
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Adjust +/-
+                  </button>
+                </div>
               </div>
             )}
           </>

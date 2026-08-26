@@ -518,7 +518,7 @@ export class AdminService {
         amount: abs,
         idempotencyKey: key,
         referenceType: 'admin_action',
-        metadata: { reason, adminId: admin.id },
+        metadata: { reason, adminId: admin.id, mode: 'delta' },
       });
     } else {
       await this.ledger.debit({
@@ -527,11 +527,70 @@ export class AdminService {
         amount: abs,
         idempotencyKey: key,
         referenceType: 'admin_action',
-        metadata: { reason, adminId: admin.id },
+        metadata: { reason, adminId: admin.id, mode: 'delta' },
       });
     }
 
     await this.log(admin.id, 'ADJUST_BALANCE', 'user', userId, null, { amount, reason });
+    return this.getUser(userId);
+  }
+
+  /** Set absolute game-credit balance (credits or debits the delta). */
+  async setBalance(admin: User, userId: string, balance: number, reason: string) {
+    if (!reason?.trim()) throw new BadRequestException('Reason required');
+    if (!Number.isFinite(balance) || balance < 0) {
+      throw new BadRequestException('Balance must be a non-negative number');
+    }
+
+    const user = await this.prisma.db.user.findUnique({
+      where: { id: userId },
+      include: { gameBalance: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const current = Number(user.gameBalance?.available ?? 0);
+    const target = Math.round(balance * 10000) / 10000;
+    const delta = Math.round((target - current) * 10000) / 10000;
+    if (delta === 0) return this.getUser(userId);
+
+    const key = `admin:set-balance:${userId}:${randomUUID()}`;
+    if (delta > 0) {
+      await this.ledger.credit({
+        userId,
+        type: 'ADMIN_ADJUSTMENT',
+        amount: delta,
+        idempotencyKey: key,
+        referenceType: 'admin_action',
+        metadata: {
+          reason,
+          adminId: admin.id,
+          mode: 'set',
+          from: current,
+          to: target,
+        },
+      });
+    } else {
+      await this.ledger.debit({
+        userId,
+        type: 'ADMIN_ADJUSTMENT',
+        amount: Math.abs(delta),
+        idempotencyKey: key,
+        referenceType: 'admin_action',
+        metadata: {
+          reason,
+          adminId: admin.id,
+          mode: 'set',
+          from: current,
+          to: target,
+        },
+      });
+    }
+
+    await this.log(admin.id, 'SET_BALANCE', 'user', userId, { balance: current }, {
+      balance: target,
+      delta,
+      reason,
+    });
     return this.getUser(userId);
   }
 

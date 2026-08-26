@@ -98,6 +98,11 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ amount, reason }),
     }),
+  setBalance: (id: string, balance: number, reason: string) =>
+    request<AdminUserDetail>(`/admin/users/${id}/set-balance`, {
+      method: 'POST',
+      body: JSON.stringify({ balance, reason }),
+    }),
   ban: (id: string) =>
     request(`/admin/users/${id}/ban`, { method: 'POST', body: '{}' }),
   unban: (id: string) =>

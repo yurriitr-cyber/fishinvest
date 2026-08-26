@@ -64,6 +64,11 @@ class AdjustDto {
   @IsString() reason!: string;
 }
 
+class SetBalanceDto {
+  @IsNumber() @Min(0) balance!: number;
+  @IsString() reason!: string;
+}
+
 class BanDto {
   @IsOptional() @IsString() reason?: string;
 }
@@ -203,6 +208,15 @@ export class AdminController {
     @Body() dto: AdjustDto,
   ): Promise<any> {
     return this.admin.adjustBalance(admin, id, dto.amount, dto.reason);
+  }
+
+  @Post('users/:id/set-balance')
+  setBalance(
+    @AdminUser() admin: User,
+    @Param('id') id: string,
+    @Body() dto: SetBalanceDto,
+  ): Promise<any> {
+    return this.admin.setBalance(admin, id, dto.balance, dto.reason);
   }
 
   @Post('users/:id/ban')
