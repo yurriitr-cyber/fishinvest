@@ -1,7 +1,7 @@
 export function formatStars(value: string | number, digits = 0) {
   const n = typeof value === 'string' ? Number(value) : value;
   if (!Number.isFinite(n)) return '—';
-  return n.toLocaleString(undefined, {
+  return n.toLocaleString('en-US', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });

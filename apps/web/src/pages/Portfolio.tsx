@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Me, type Portfolio } from '../lib/api';
+import { MediaSlot } from '../components/MediaSlot';
 import { fishGlyph, formatPct, formatStars, pnlClass } from '../lib/format';
 
 export function PortfolioPage({
@@ -29,7 +30,7 @@ export function PortfolioPage({
         </div>
         <div className="balance-pill">
           <div className="label">Cash</div>
-          <div className="value">⭐ {formatStars(me.balance)}</div>
+          <div className="value">{formatStars(me.balance)} CR</div>
         </div>
       </div>
 
@@ -40,11 +41,11 @@ export function PortfolioPage({
           <div className="ticker">
             <div className="ticker-card">
               <div className="label">Equity</div>
-              <div className="value">⭐ {formatStars(data.currentValue)}</div>
+              <div className="value">{formatStars(data.currentValue)} CR</div>
             </div>
             <div className="ticker-card">
               <div className="label">Invested</div>
-              <div className="value">⭐ {formatStars(data.totalInvested)}</div>
+              <div className="value">{formatStars(data.totalInvested)} CR</div>
             </div>
           </div>
 
@@ -59,7 +60,7 @@ export function PortfolioPage({
             <div className="summary-item">
               <div className="label">Realized</div>
               <div className={`value ${pnlClass(data.realizedPnl)}`}>
-                ⭐ {formatStars(data.realizedPnl)}
+                {formatStars(data.realizedPnl)} CR
               </div>
             </div>
           </div>
@@ -82,7 +83,7 @@ export function PortfolioPage({
                 type="button"
                 onClick={() => onSelectFish(p.fishId)}
               >
-                <div className="glyph">{fishGlyph(p.symbol)}</div>
+                <MediaSlot className="thumb" label={fishGlyph(p.symbol)} />
                 <div className="row-main">
                   <div className="name">{p.symbol}</div>
                   <div className="meta">

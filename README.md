@@ -70,5 +70,6 @@ Stable production host (API + web + bot + Postgres): **[DEPLOY.md](./DEPLOY.md)*
 - [x] Telegram bot launcher
 - [x] Telegram Stars deposits (invoice + bot confirm + ledger)
 - [x] TON oracle scaffold (`GET /api/oracle/ton`)
+- [x] TON deposits (wallet + memo + poller)
 - [x] Admin panel (`apps/admin` → http://localhost:5181)
-- [ ] Live TON / Gifts / crypto checkout
+- [ ] Live Gifts / other crypto checkout

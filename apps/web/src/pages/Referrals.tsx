@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { MediaSlot } from '../components/MediaSlot';
 import { api, type Me, type ReferralStats } from '../lib/api';
 import { formatStars } from '../lib/format';
 
@@ -34,7 +35,7 @@ export function Referrals({
         <div>
           <div className="eyebrow">Growth</div>
           <h1>Invite</h1>
-          <p>You +300 ⭐ · Friend +50 ⭐</p>
+          <p>You +300 CR · Friend +50 CR</p>
         </div>
       </div>
 
@@ -46,7 +47,7 @@ export function Referrals({
         <div className="ticker-card">
           <div className="label">Earned</div>
           <div className="value">
-            ⭐ {stats ? formatStars(stats.totalBonusEarned) : '—'}
+            {stats ? `${formatStars(stats.totalBonusEarned)} CR` : '—'}
           </div>
         </div>
       </div>
@@ -61,7 +62,7 @@ export function Referrals({
       <div className="list">
         {(stats?.referrals || []).map((r) => (
           <div key={r.id} className="row" style={{ cursor: 'default' }}>
-            <div className="glyph">↗</div>
+            <MediaSlot className="thumb" label="INV" />
             <div className="row-main">
               <div className="name">
                 {r.username || r.firstName || 'Friend'}

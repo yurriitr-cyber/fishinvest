@@ -89,6 +89,7 @@ export function PriceChart({
   }, [points]);
 
   const up = change >= 0;
+  const stroke = up ? '#38dfa4' : '#ff6b81';
 
   return (
     <div className={`chart-card ${up ? 'up' : 'down'}`}>
@@ -107,27 +108,28 @@ export function PriceChart({
       >
         <defs>
           <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-            <stop
-              offset="0%"
-              stopColor={up ? '#3ecf8e' : '#ef5b6b'}
-              stopOpacity="0.22"
-            />
-            <stop
-              offset="100%"
-              stopColor={up ? '#3ecf8e' : '#ef5b6b'}
-              stopOpacity="0"
-            />
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.34" />
+            <stop offset="60%" stopColor={stroke} stopOpacity="0.08" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
           </linearGradient>
+          <filter id="chartGlow" x="-10%" y="-30%" width="120%" height="180%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
         {area && <path d={area} fill="url(#chartFill)" />}
         {path && (
           <path
             d={path}
             fill="none"
-            stroke={up ? '#3ecf8e' : '#ef5b6b'}
-            strokeWidth="1.6"
+            stroke={stroke}
+            strokeWidth="1.8"
             strokeLinejoin="round"
             strokeLinecap="round"
+            filter="url(#chartGlow)"
             vectorEffect="non-scaling-stroke"
           />
         )}

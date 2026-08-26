@@ -7,6 +7,7 @@ import {
   formatSupply,
   pnlClass,
 } from '../lib/format';
+import { MediaSlot } from '../components/MediaSlot';
 
 export function Market({
   me,
@@ -54,14 +55,16 @@ export function Market({
         </div>
         <div className="balance-pill">
           <div className="label">Balance</div>
-          <div className="value">⭐ {formatStars(me.balance)}</div>
+          <div className="value">{formatStars(me.balance)} CR</div>
         </div>
       </div>
 
-      <div className="ticker">
+      <MediaSlot label="Banner media" ratio="21 / 9" />
+
+      <div className="ticker" style={{ marginTop: 14 }}>
         <div className="ticker-card">
           <div className="label">Portfolio</div>
-          <div className="value">⭐ {formatStars(me.portfolioValue)}</div>
+          <div className="value">{formatStars(me.portfolioValue)} CR</div>
         </div>
         <div className="ticker-card">
           <div className="label">Listed</div>
@@ -95,7 +98,11 @@ export function Market({
               type="button"
               onClick={() => onSelectFish(f.id)}
             >
-              <div className="glyph">{fishGlyph(f.symbol)}</div>
+              {f.imageUrl ? (
+                <img className="glyph" src={f.imageUrl} alt="" />
+              ) : (
+                <MediaSlot className="thumb" label={fishGlyph(f.symbol)} />
+              )}
               <div className="row-main">
                 <div className="name">{f.symbol}</div>
                 <div className="meta">
@@ -118,10 +125,6 @@ export function Market({
           );
         })}
       </div>
-
-      <p className="meme">
-        Cheap fish move fast. Expensive fish stay calm. Supply is finite.
-      </p>
     </div>
   );
 }

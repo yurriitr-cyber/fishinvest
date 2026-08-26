@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { MediaSlot } from '../components/MediaSlot';
 import { PriceChart } from '../components/PriceChart';
 import { api, type Fish } from '../lib/api';
 import {
+  fishGlyph,
   formatPct,
   formatStars,
   formatSupply,
@@ -96,14 +98,26 @@ export function Trade({
       {fish && (
         <>
           <div className="topbar">
-            <div>
-              <div className="eyebrow">{fish.rarity}</div>
-              <h1>{fish.symbol}</h1>
-              <p>{fish.name}</p>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              {fish.imageUrl ? (
+                <img
+                  className="glyph"
+                  src={fish.imageUrl}
+                  alt=""
+                  style={{ width: 48, height: 48, borderRadius: 12 }}
+                />
+              ) : (
+                <MediaSlot className="thumb" label={fishGlyph(fish.symbol)} />
+              )}
+              <div>
+                <div className="eyebrow">{fish.rarity}</div>
+                <h1>{fish.symbol}</h1>
+                <p>{fish.name}</p>
+              </div>
             </div>
             <div className="balance-pill">
               <div className="label">Balance</div>
-              <div className="value">⭐ {formatStars(balance)}</div>
+              <div className="value">{formatStars(balance)} CR</div>
             </div>
           </div>
 
@@ -180,7 +194,7 @@ export function Trade({
             <div className="summary">
               <div className="summary-item">
                 <div className="label">Total</div>
-                <div className="value">⭐ {formatStars(total, 2)}</div>
+                <div className="value">{formatStars(total, 2)} CR</div>
               </div>
               <div className="summary-item">
                 <div className="label">Fill</div>

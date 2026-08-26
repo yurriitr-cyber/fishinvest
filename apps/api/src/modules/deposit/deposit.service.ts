@@ -65,10 +65,10 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
         this.pollTonDeposits().catch((err) =>
           this.logger.warn(`TON poll failed: ${err?.message || err}`),
         );
-      }, 10_000);
+      }, 5_000);
       setTimeout(() => {
         this.pollTonDeposits().catch(() => undefined);
-      }, 3_000);
+      }, 1_500);
       this.logger.log(`TON deposits enabled → ${tonAddr.slice(0, 8)}… (+${this.tonBonusPercent()}% bonus)`);
     } else {
       this.logger.log('TON deposits off (set TON_DEPOSIT_ADDRESS to enable)');
@@ -90,19 +90,19 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
 
     const labels: Record<string, { label: string; note: string }> = {
       TELEGRAM_STARS: {
-        label: '⭐ Telegram Stars',
+        label: 'Telegram Stars',
         note: '1 Telegram Star = 1 game credit',
       },
       TON: {
-        label: '💎 TON',
-        note: 'Live TON→★ rate + 15% bonus · auto-confirm',
+        label: 'TON',
+        note: 'Live TON→CR rate + 15% bonus · auto-confirm',
       },
       TELEGRAM_GIFT: {
-        label: '🎁 Telegram Gift',
+        label: 'Telegram Gift',
         note: 'Verified gifts only after valuation',
       },
       CRYPTO: {
-        label: '₿ Other crypto',
+        label: 'Other crypto',
         note: 'USDT / BTC / ETH via shared payment interface',
       },
     };

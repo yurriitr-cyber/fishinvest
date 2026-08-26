@@ -121,7 +121,7 @@ export default function App() {
             me={me}
             onCredited={async () => {
               await refreshMe();
-              notify('Stars deposit confirmed. Game credits added.');
+              notify('Deposit confirmed. Credits added.');
             }}
           />
         );
@@ -136,18 +136,26 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      {body}
-      {!showWelcome && !loading && me && !error && (
-        <BottomNav
-          tab={tab}
-          onChange={(next) => {
-            setSelectedFishId(null);
-            setTab(next);
-          }}
-        />
-      )}
-      {toast && <div className="toast">{toast}</div>}
-    </div>
+    <>
+      <div className="ocean" aria-hidden>
+        <span className="ocean-rays" />
+        <span className="ocean-caustics" />
+        <span className="ocean-floor" />
+        <span className="ocean-grain" />
+      </div>
+      <div className="app-shell">
+        {body}
+        {!showWelcome && !loading && me && !error && (
+          <BottomNav
+            tab={tab}
+            onChange={(next) => {
+              setSelectedFishId(null);
+              setTab(next);
+            }}
+          />
+        )}
+        {toast && <div className="toast">{toast}</div>}
+      </div>
+    </>
   );
 }

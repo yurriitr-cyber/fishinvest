@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   api,
   type DepositMethod,
@@ -31,6 +31,8 @@ async function openTelegramInvoice(
   return 'unavailable';
 }
 
+type TonPhase = 'idle' | 'awaiting' | 'checking' | 'credited' | 'pending' | 'failed';
+
 export function Deposit({
   me,
   onCredited,
@@ -47,6 +49,9 @@ export function Deposit({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDeposit, setLastDeposit] = useState<DepositRecord | null>(null);
+  const [tonPhase, setTonPhase] = useState<TonPhase>('idle');
+  const [statusMsg, setStatusMsg] = useState('');
+  const watchRef = useRef(0);
 
   const starsMethod = methods.find((m) => m.code === 'TELEGRAM_STARS');
   const tonMethod = methods.find((m) => m.code === 'TON');
@@ -56,12 +61,7 @@ export function Deposit({
   useEffect(() => {
     api
       .depositMethods()
-      .then((m) => {
-        setMethods(m);
-        if (m.find((x) => x.code === 'TON')?.enabled) {
-          /* keep default stars */
-        }
-      })
+      .then(setMethods)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed'));
   }, []);
 
@@ -103,27 +103,60 @@ export function Deposit({
     };
   }, [tonSelected, tonMethod?.enabled, channel]);
 
-  useEffect(() => {
-    if (!lastDeposit || lastDeposit.provider !== 'TON') return;
-    if (lastDeposit.status === 'CONFIRMED') return;
-    let cancelled = false;
-    const id = setInterval(async () => {
+  async function watchTonDeposit(depositId: string, token: number) {
+    setTonPhase('awaiting');
+    setStatusMsg('Open your wallet, send the exact amount with the memo…');
+
+    // Checks across ~10s, then a clear yes/no; a few slower retries after
+    const delays = [1000, 2000, 2000, 2500, 2500, 4000, 8000];
+    let elapsed = 0;
+    for (const wait of delays) {
+      await new Promise((r) => setTimeout(r, wait));
+      elapsed += wait;
+      if (watchRef.current !== token) return;
+      setTonPhase('checking');
+      setStatusMsg(
+        elapsed <= 10_000
+          ? `Checking payment… (${Math.round(elapsed / 1000)}s)`
+          : 'Still checking the blockchain…',
+      );
       try {
-        const fresh = await api.checkTonDeposit(lastDeposit.id);
-        if (cancelled) return;
+        const fresh = await api.checkTonDeposit(depositId);
+        if (watchRef.current !== token) return;
         setLastDeposit(fresh);
         if (fresh.status === 'CONFIRMED') {
+          setTonPhase('credited');
+          setStatusMsg(
+            `Credits received: +${formatStars(fresh.gameCreditAmount || '0')} CR.`,
+          );
           await onCredited?.();
+          return;
+        }
+        if (fresh.status === 'CANCELLED' || fresh.status === 'FAILED') {
+          setTonPhase('failed');
+          setStatusMsg('Deposit expired or failed. Create a new one.');
+          return;
+        }
+        if (elapsed >= 10_000) {
+          setTonPhase('pending');
+          setStatusMsg(
+            'Not credited within 10 seconds. If you already sent TON, wait a bit or tap Check now.',
+          );
+        } else {
+          setTonPhase('awaiting');
+          setStatusMsg('Payment not seen yet — keep the memo exact.');
         }
       } catch {
-        /* ignore transient */
+        setStatusMsg('Network hiccup while checking. Retrying…');
       }
-    }, 8000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [lastDeposit?.id, lastDeposit?.status, lastDeposit?.provider, onCredited]);
+    }
+
+    if (watchRef.current !== token) return;
+    setTonPhase('pending');
+    setStatusMsg(
+      'Still not credited. Confirm amount + memo in your wallet, then Check now.',
+    );
+  }
 
   async function payStars() {
     if (!selected) return;
@@ -169,11 +202,20 @@ export function Deposit({
         `ton-ui:${me.id}:${tonSelected}:${Date.now()}`,
       );
       setLastDeposit(deposit);
+      const token = ++watchRef.current;
+      // Start watcher before opening wallet so we catch fast payments
+      void watchTonDeposit(deposit.id, token);
       if (deposit.transferLink) {
-        window.location.href = deposit.transferLink;
+        // Prefer opening without killing the SPA when possible
+        try {
+          window.open(deposit.transferLink, '_blank');
+        } catch {
+          window.location.href = deposit.transferLink;
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'TON deposit failed');
+      setTonPhase('failed');
     } finally {
       setBusy(false);
     }
@@ -187,6 +229,29 @@ export function Deposit({
     }
   }
 
+  async function checkNow() {
+    if (!lastDeposit || lastDeposit.provider !== 'TON') return;
+    setTonPhase('checking');
+    setStatusMsg('Checking the blockchain…');
+    try {
+      const fresh = await api.checkTonDeposit(lastDeposit.id);
+      setLastDeposit(fresh);
+      if (fresh.status === 'CONFIRMED') {
+        setTonPhase('credited');
+        setStatusMsg(
+          `Credited +${formatStars(fresh.gameCreditAmount || '0')} CR to your balance.`,
+        );
+        await onCredited?.();
+      } else {
+        setTonPhase('pending');
+        setStatusMsg('Payment not found yet. Confirm amount + memo, then retry.');
+      }
+    } catch (e) {
+      setTonPhase('failed');
+      setStatusMsg(e instanceof Error ? e.message : 'Check failed');
+    }
+  }
+
   return (
     <div className="screen">
       <div className="topbar">
@@ -197,48 +262,28 @@ export function Deposit({
         </div>
         <div className="balance-pill">
           <div className="label">Balance</div>
-          <div className="value">⭐ {formatStars(me.balance)}</div>
+          <div className="value">{formatStars(me.balance)} CR</div>
         </div>
       </div>
 
       {error && <div className="error-box">{error}</div>}
 
-      <div className="side-toggle" style={{ marginBottom: 14 }}>
+      <div className="side-toggle channel">
         <button
           type="button"
-          className={`buy ${channel === 'stars' ? 'active' : ''}`}
+          className={channel === 'stars' ? 'active' : undefined}
           onClick={() => setChannel('stars')}
         >
-          Stars
+          Telegram Stars
         </button>
         <button
           type="button"
-          className={`sell ${channel === 'ton' ? 'active' : ''}`}
+          className={channel === 'ton' ? 'active' : undefined}
           onClick={() => setChannel('ton')}
           disabled={!tonMethod?.enabled}
         >
           TON{!tonMethod?.enabled ? ' · soon' : ''}
         </button>
-      </div>
-
-      <div className="section-title">Methods</div>
-      <div className="list">
-        {methods.map((m) => (
-          <div key={m.code} className="deposit-method">
-            <div>
-              <div className="title">{m.label}</div>
-              <div className="note">
-                {m.note}
-                {m.enabled && Number(m.feePercent) > 0
-                  ? ` · fee ${m.feePercent}%`
-                  : ''}
-              </div>
-            </div>
-            <span className={`badge ${m.enabled ? '' : 'off'}`}>
-              {m.enabled ? 'LIVE' : 'SOON'}
-            </span>
-          </div>
-        ))}
       </div>
 
       {channel === 'stars' && starsMethod?.enabled && (
@@ -254,7 +299,7 @@ export function Deposit({
                 className={`chip ${selected === n ? 'active' : ''}`}
                 onClick={() => setSelected(n)}
               >
-                ⭐ {n}
+                {n} Stars
               </button>
             ))}
           </div>
@@ -263,13 +308,11 @@ export function Deposit({
             <div className="summary">
               <div className="summary-item">
                 <div className="label">Rate</div>
-                <div className="value">1★ = 1 game ⭐</div>
+                <div className="value">1 Star = 1 CR</div>
               </div>
               <div className="summary-item">
                 <div className="label">You receive</div>
-                <div className="value">
-                  ⭐ {formatStars(quote.gameCreditAmount)}
-                </div>
+                <div className="value">{formatStars(quote.gameCreditAmount)} CR</div>
               </div>
             </div>
           )}
@@ -280,7 +323,7 @@ export function Deposit({
             disabled={busy || !selected}
             onClick={payStars}
           >
-            {busy ? 'Opening invoice…' : `Pay ⭐ ${selected}`}
+            {busy ? 'Opening invoice…' : `Pay ${selected} Stars`}
           </button>
         </div>
       )}
@@ -312,22 +355,19 @@ export function Deposit({
               <div className="summary-item">
                 <div className="label">You receive</div>
                 <div className="value">
-                  ⭐ {formatStars(tonQuote.gameCreditAmount)}
+                  {formatStars(tonQuote.gameCreditAmount)} CR
                 </div>
               </div>
               <div className="summary-item">
-                <div className="label">TON bonus</div>
+                <div className="label">Bonus</div>
                 <div className="value">
                   +{Number(tonQuote.bonusPercent ?? 15).toFixed(0)}%
-                  {tonQuote.bonusAmount
-                    ? ` (⭐ ${formatStars(tonQuote.bonusAmount)})`
-                    : ''}
                 </div>
               </div>
               <div className="summary-item">
-                <div className="label">Rate</div>
+                <div className="label">Oracle</div>
                 <div className="value" style={{ fontSize: 12 }}>
-                  live oracle
+                  live
                 </div>
               </div>
             </div>
@@ -342,57 +382,81 @@ export function Deposit({
             {busy ? 'Creating…' : `Pay ${tonSelected} TON`}
           </button>
 
-          {lastDeposit?.provider === 'TON' && lastDeposit.status !== 'CONFIRMED' && (
-            <div style={{ marginTop: 14 }}>
-              <p className="meme" style={{ marginTop: 0 }}>
-                Send exactly <strong>{lastDeposit.assetAmount} TON</strong> with
-                comment/memo <strong>{lastDeposit.memo}</strong>. Credits appear
-                after the chain confirms (auto-check every ~8s).
-              </p>
-              {lastDeposit.depositAddress && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  style={{ marginBottom: 8 }}
-                  onClick={() => copy(lastDeposit.depositAddress || '')}
-                >
-                  Copy address
-                </button>
+          {lastDeposit?.provider === 'TON' && (
+            <div
+              className={`status-card ${
+                tonPhase === 'credited'
+                  ? 'ok'
+                  : tonPhase === 'failed'
+                    ? 'fail'
+                    : 'wait'
+              }`}
+            >
+              <div className="label">Deposit status</div>
+              <div className="title">
+                {tonPhase === 'credited'
+                  ? 'Credited'
+                  : tonPhase === 'checking'
+                    ? 'Checking…'
+                    : tonPhase === 'failed'
+                      ? 'Not credited'
+                      : tonPhase === 'pending'
+                        ? 'Still waiting'
+                        : 'Awaiting payment'}
+              </div>
+              <p className="detail">{statusMsg}</p>
+              {lastDeposit.status !== 'CONFIRMED' && (
+                <>
+                  <p className="detail" style={{ marginTop: 8 }}>
+                    Send <strong>{lastDeposit.assetAmount} TON</strong> with memo{' '}
+                    <strong>{lastDeposit.memo}</strong>
+                  </p>
+                  <div className="actions">
+                    {lastDeposit.depositAddress && (
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => copy(lastDeposit.depositAddress || '')}
+                      >
+                        Copy address
+                      </button>
+                    )}
+                    {lastDeposit.memo && (
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => copy(lastDeposit.memo || '')}
+                      >
+                        Copy memo
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-solid"
+                      onClick={checkNow}
+                    >
+                      Check now
+                    </button>
+                  </div>
+                </>
               )}
-              {lastDeposit.memo && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  style={{ marginBottom: 8 }}
-                  onClick={() => copy(lastDeposit.memo || '')}
-                >
-                  Copy memo
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={async () => {
-                  const fresh = await api.checkTonDeposit(lastDeposit.id);
-                  setLastDeposit(fresh);
-                  if (fresh.status === 'CONFIRMED') await onCredited?.();
-                }}
-              >
-                I paid — check now
-              </button>
             </div>
           )}
         </div>
       )}
 
-      {lastDeposit && (
-        <p className="meme">
-          Order {lastDeposit.id.slice(0, 8)}… · {lastDeposit.provider} ·{' '}
-          {lastDeposit.status}
-          {lastDeposit.status === 'CONFIRMED'
-            ? ` · +${formatStars(lastDeposit.gameCreditAmount || '0')}`
-            : ''}
-        </p>
+      {lastDeposit?.provider === 'TELEGRAM_STARS' && (
+        <div
+          className={`status-card ${lastDeposit.status === 'CONFIRMED' ? 'ok' : 'wait'}`}
+        >
+          <div className="label">Stars deposit</div>
+          <div className="title">{lastDeposit.status}</div>
+          <p className="detail">
+            {lastDeposit.status === 'CONFIRMED'
+              ? `Credited +${formatStars(lastDeposit.gameCreditAmount || '0')} CR`
+              : `Order ${lastDeposit.id.slice(0, 8)}…`}
+          </p>
+        </div>
       )}
     </div>
   );
