@@ -124,7 +124,7 @@ export function Casino({
     load().catch((e) =>
       setError(
         translateError(
-          e instanceof Error ? e.message : 'Failed to load',
+          e instanceof Error ? e.message : 'Не удалось загрузить',
         ),
       ),
     );
@@ -201,7 +201,7 @@ export function Casino({
       );
     } catch (e) {
       setError(
-        translateError(e instanceof Error ? e.message : 'Open failed'),
+        translateError(e instanceof Error ? e.message : 'Не удалось открыть'),
       );
       void hapticNotify('error');
       setBusy(false);

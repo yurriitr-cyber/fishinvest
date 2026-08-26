@@ -235,7 +235,7 @@ export function Deposit({
       }
     } catch (e) {
       setError(
-        translateError(e instanceof Error ? e.message : 'Deposit failed'),
+        translateError(e instanceof Error ? e.message : 'Депозит не удался'),
       );
     } finally {
       setBusy(false);
@@ -263,7 +263,7 @@ export function Deposit({
       }
     } catch (e) {
       setError(
-        translateError(e instanceof Error ? e.message : 'Deposit failed'),
+        translateError(e instanceof Error ? e.message : 'Депозит не удался'),
       );
       setTonPhase('failed');
     } finally {
