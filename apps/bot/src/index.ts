@@ -20,7 +20,9 @@ for (const envPath of envCandidates) {
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const webAppUrl = process.env.WEBAPP_URL || 'http://localhost:5180';
 const miniAppName = process.env.TELEGRAM_MINI_APP_NAME || 'app';
-const botUsername = process.env.TELEGRAM_BOT_USERNAME || 'rarefishbot';
+/** Filled from Telegram getMe on start — do not trust a wrong env username. */
+let botUsername =
+  process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/, '') || 'rarefishinvestment_bot';
 const apiBase = process.env.API_INTERNAL_URL || 'http://localhost:3000/api';
 const internalSecret = process.env.INTERNAL_API_SECRET || '';
 
@@ -46,6 +48,7 @@ function openAppKeyboard(startParam?: string) {
     return new InlineKeyboard().webApp('🐟 Open Rare Fish Market', url);
   }
 
+  // Fallback only when WEBAPP_URL is not https — uses this bot's real username
   return new InlineKeyboard().url(
     '🐟 Open Mini App (set WEBAPP_URL to https)',
     `https://t.me/${botUsername}/${miniAppName}`,
@@ -173,8 +176,21 @@ bot.catch((err) => {
 
 bot.start({
   onStart: (info) => {
-    console.log(`Bot @${info.username} running`);
+    if (info.username) {
+      if (botUsername !== info.username) {
+        console.warn(
+          `TELEGRAM_BOT_USERNAME=${botUsername} != getMe @${info.username} — using getMe`,
+        );
+      }
+      botUsername = info.username;
+    }
+    console.log(`Bot @${botUsername} running`);
     console.log(`WEBAPP_URL=${webAppUrl}`);
     console.log(`API_INTERNAL_URL=${apiBase}`);
+    if (!webAppUrl.startsWith('https://')) {
+      console.warn(
+        'WEBAPP_URL is not https — Mini App button falls back to t.me link. Set WEBAPP_URL to your Railway web URL.',
+      );
+    }
   },
 });

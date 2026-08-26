@@ -219,7 +219,8 @@ export class UsersService {
 
     const balance = user.gameBalance?.available ?? new Prisma.Decimal(0);
     const botUsername =
-      this.config.get<string>('TELEGRAM_BOT_USERNAME') ?? 'rarefishbot';
+      this.config.get<string>('TELEGRAM_BOT_USERNAME')?.replace(/^@/, '') ??
+      'rarefishinvestment_bot';
     const miniAppName =
       this.config.get<string>('TELEGRAM_MINI_APP_NAME') ?? 'app';
 
