@@ -33,7 +33,7 @@ const FISH_SEED: Array<{
   { symbol: 'BDRAGON', name: 'Black Dragonfish', rarity: FishRarity.LEGENDARY, price: 765, supply: 10_000, volatility: 0.045, trend: 0.015 },
   // Top mythics (≥600 ladder): ×3 vs previous seed
   { symbol: 'STING', name: 'Void Stingray', rarity: FishRarity.MYTHIC, price: 1950, supply: 5_000, volatility: 0.035, trend: 0.01 },
-  { symbol: 'MANTA', name: 'Deep Manta', rarity: FishRarity.MYTHIC, price: 2550, supply: 1_000, volatility: 0.028, trend: 0.012 },
+  { symbol: 'MANTA', name: 'Deep Manta', rarity: FishRarity.MYTHIC, price: 2550, supply: 2_000, volatility: 0.028, trend: 0.012 },
   { symbol: 'MWHALE', name: 'Mega Whale', rarity: FishRarity.MYTHIC, price: 3000, supply: 1_000, volatility: 0.02, trend: 0.008 },
 ];
 
