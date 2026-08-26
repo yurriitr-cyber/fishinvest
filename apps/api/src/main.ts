@@ -8,6 +8,7 @@ import {
 } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { applySecurity, parseCorsOrigins } from './security/security';
 
 function loadRootEnv() {
   const candidates = [
@@ -44,14 +45,29 @@ async function bootstrap() {
     }),
   );
 
+  const origins = parseCorsOrigins();
   app.enableCors({
-    origin: true,
+    origin: origins,
     credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-admin-secret',
+      'x-admin-session',
+      'x-admin-telegram-id',
+      'x-dev-telegram-id',
+    ],
   });
+
+  await applySecurity(app);
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
   console.log(
     `TELEGRAM_BOT_TOKEN: ${token && token !== 'your_bot_token_here' ? 'set' : 'MISSING'}`,
+  );
+  console.log(
+    `CORS: ${origins === true ? 'reflect (dev)' : `allowlist (${origins.length})`}`,
   );
 
   const port = process.env.PORT || 3000;

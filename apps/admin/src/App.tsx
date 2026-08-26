@@ -1,32 +1,84 @@
 import { useEffect, useState } from 'react';
 import {
   adminApi,
-  getAdminSecret,
+  clearAdminSession,
+  getAdminSession,
   getDevTelegramId,
-  setAdminSecret,
+  logoutAdmin,
+  setAdminSession,
   setDevTelegramId,
   type AdminUser,
   type AdminUserDetail,
+  type AuditItem,
+  type CasinoStats,
   type Deposit,
   type Fish,
+  type MarketEvent,
   type Payment,
+  type SecurityOverview,
 } from './api';
 
-type Tab = 'targets' | 'fish' | 'dashboard' | 'users' | 'payments' | 'deposits';
+type Tab =
+  | 'dashboard'
+  | 'targets'
+  | 'fish'
+  | 'users'
+  | 'payments'
+  | 'deposits'
+  | 'events'
+  | 'casino'
+  | 'audit'
+  | 'security';
+
+const NAV: Array<{ id: Tab; label: string; group?: string }> = [
+  { id: 'dashboard', label: 'Обзор', group: 'Главное' },
+  { id: 'targets', label: 'Рампа 24ч' },
+  { id: 'fish', label: 'Цены / фриз' },
+  { id: 'users', label: 'Пользователи', group: 'Люди' },
+  { id: 'deposits', label: 'Депозиты' },
+  { id: 'payments', label: 'Платежи', group: 'Экономика' },
+  { id: 'events', label: 'События рынка' },
+  { id: 'casino', label: 'Кейсы' },
+  { id: 'audit', label: 'Аудит', group: 'Система' },
+  { id: 'security', label: 'Безопасность' },
+];
 
 function n(v: string | number | null | undefined, d = 2) {
   const x = Number(v ?? 0);
-  return Number.isFinite(x) ? x.toLocaleString(undefined, { maximumFractionDigits: d }) : '—';
+  return Number.isFinite(x)
+    ? x.toLocaleString('ru-RU', { maximumFractionDigits: d })
+    : '—';
+}
+
+function when(iso: string) {
+  try {
+    return new Date(iso).toLocaleString('ru-RU');
+  } catch {
+    return iso;
+  }
+}
+
+function Ocean() {
+  return (
+    <div className="ocean" aria-hidden>
+      <span className="ocean-rays" />
+      <span className="ocean-caustics" />
+      <span className="ocean-floor" />
+    </div>
+  );
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('targets');
+  const [tab, setTab] = useState<Tab>('dashboard');
   const [tgId, setTgId] = useState(getDevTelegramId());
-  const [secret, setSecret] = useState(getAdminSecret());
+  const [secret, setSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [meOk, setMeOk] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sessionExp, setSessionExp] = useState(
+    () => getAdminSession()?.expiresAt || '',
+  );
 
   const [dash, setDash] = useState<Record<string, unknown> | null>(null);
   const [fish, setFish] = useState<Fish[]>([]);
@@ -34,11 +86,25 @@ export default function App() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [balanceInput, setBalanceInput] = useState('');
-  const [balanceReason, setBalanceReason] = useState('admin top-up');
+  const [balanceReason, setBalanceReason] = useState('пополнение админом');
+  const [adjustDelta, setAdjustDelta] = useState('50');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [oracle, setOracle] = useState<Record<string, unknown> | null>(null);
+  const [audit, setAudit] = useState<AuditItem[]>([]);
+  const [events, setEvents] = useState<MarketEvent[]>([]);
+  const [casino, setCasino] = useState<CasinoStats | null>(null);
+  const [security, setSecurity] = useState<SecurityOverview | null>(null);
   const [q, setQ] = useState('');
+
+  const [eventForm, setEventForm] = useState({
+    name: '',
+    description: '',
+    fishId: '',
+    priceMultiplier: '1.1',
+    startTime: '',
+    endTime: '',
+  });
 
   async function boot() {
     setError(null);
@@ -46,24 +112,55 @@ export default function App() {
       const me = await adminApi.me();
       if (!me.isAdmin) {
         throw new Error(
-          'Not an admin. Add your Telegram ID to ADMIN_TELEGRAM_IDS on the API.',
+          'Нет прав админа. Добавьте Telegram ID в ADMIN_TELEGRAM_IDS на API.',
         );
       }
       setMeOk(true);
     } catch (e) {
       setMeOk(false);
-      setError(e instanceof Error ? e.message : 'Auth failed');
+      setError(e instanceof Error ? e.message : 'Ошибка авторизации');
     }
   }
 
-  function saveCreds() {
-    setDevTelegramId(tgId.trim());
-    setAdminSecret(secret.trim());
-    boot();
+  async function signIn() {
+    setBusy(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const id = Number(tgId.trim());
+      if (!Number.isFinite(id) || id <= 0) {
+        throw new Error('Укажите корректный Telegram ID');
+      }
+      if (secret.trim().length < 8) {
+        throw new Error('Секрет слишком короткий');
+      }
+      setDevTelegramId(String(id));
+      const session = await adminApi.login(id, secret.trim());
+      setAdminSession(session.token, session.expiresAt);
+      setSessionExp(session.expiresAt);
+      setSecret('');
+      setOkMsg('Сессия создана. Секрет больше не хранится в браузере.');
+      await boot();
+    } catch (e) {
+      setMeOk(false);
+      setError(e instanceof Error ? e.message : 'Вход не удался');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function signOut() {
+    logoutAdmin();
+    clearAdminSession();
+    setMeOk(false);
+    setSessionExp('');
+    setDash(null);
+    setSelectedUser(null);
+    setOkMsg('Вы вышли из админки');
   }
 
   useEffect(() => {
-    if (getDevTelegramId() && getAdminSecret()) boot();
+    if (getDevTelegramId() && getAdminSession()) boot();
   }, []);
 
   useEffect(() => {
@@ -72,14 +169,16 @@ export default function App() {
     (async () => {
       try {
         if (tab === 'dashboard') setDash(await adminApi.dashboard());
-        if (tab === 'fish' || tab === 'targets') {
+        if (tab === 'fish' || tab === 'targets' || tab === 'events') {
           const list = await adminApi.fish();
           setFish(list);
-          const next: Record<string, string> = {};
-          for (const f of list) {
-            next[f.id] = String(Number(f.dailyTargetPercent ?? 0));
+          if (tab === 'targets') {
+            const next: Record<string, string> = {};
+            for (const f of list) {
+              next[f.id] = String(Number(f.dailyTargetPercent ?? 0));
+            }
+            setTargets(next);
           }
-          setTargets(next);
         }
         if (tab === 'users') setUsers(await adminApi.users(q || undefined));
         if (tab === 'payments') {
@@ -87,19 +186,21 @@ export default function App() {
           setOracle(await adminApi.oracles());
         }
         if (tab === 'deposits') setDeposits(await adminApi.deposits());
+        if (tab === 'audit') setAudit(await adminApi.audit());
+        if (tab === 'events') setEvents(await adminApi.events());
+        if (tab === 'casino') setCasino(await adminApi.casino());
+        if (tab === 'security') setSecurity(await adminApi.security());
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Load failed');
+        setError(e instanceof Error ? e.message : 'Ошибка загрузки');
       }
     })();
   }, [tab, meOk]);
 
-  // Live ramp progress while on 24h tab
   useEffect(() => {
     if (!meOk || tab !== 'targets') return;
     const id = setInterval(async () => {
       try {
-        const list = await adminApi.fish();
-        setFish(list);
+        setFish(await adminApi.fish());
       } catch {
         /* ignore */
       }
@@ -118,7 +219,7 @@ export default function App() {
       }));
       const res = await adminApi.setDailyTargets(payload, 24);
       setOkMsg(
-        `Ramp started: ${res.updated} fish will reach target over ${res.durationHours}h (not instantly)`,
+        `Рампа запущена: ${res.updated} рыб достигнут цели за ${res.durationHours} ч (не мгновенно)`,
       );
       const list = await adminApi.fish();
       setFish(list);
@@ -128,7 +229,7 @@ export default function App() {
       }
       setTargets(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить');
     } finally {
       setBusy(false);
     }
@@ -142,505 +243,950 @@ export default function App() {
     });
   }
 
-  return (
-    <div className="layout">
-      <aside className="side">
-        <h1>
-          Rare Fish
-          <span>Admin</span>
-        </h1>
-        <nav>
-          {(
-            [
-              ['targets', '24h ramp'],
-              ['fish', 'Override'],
-              ['dashboard', 'Dashboard'],
-              ['users', 'Users'],
-              ['payments', 'Payments'],
-              ['deposits', 'Deposits'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={tab === id ? 'active' : undefined}
-              onClick={() => setTab(id)}
-              disabled={!meOk && id !== 'targets'}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-        <div className="creds">
-          <div className="muted">Telegram ID</div>
-          <input
-            value={tgId}
-            onChange={(e) => setTgId(e.target.value)}
-            placeholder="123456789"
-          />
-          <div className="muted">Admin secret</div>
-          <input
-            type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            placeholder="ADMIN_API_SECRET"
-          />
-          <button type="button" className="primary" onClick={saveCreds}>
-            Sign in
-          </button>
-        </div>
-      </aside>
-
-      <main className="main">
-        {error && <div className="error">{error}</div>}
-        {okMsg && <div className="ok-box">{okMsg}</div>}
-
-        {!meOk && (
-          <div className="panel">
-            <h2>Sign in</h2>
-            <p className="muted">
-              1. Left sidebar → Telegram ID: <code>819826046</code>
-              <br />
-              2. Admin secret = Railway → service <code>@rare-fish/api</code> →
-              Variables → <code>INTERNAL_API_SECRET</code> (click the eye, copy
-              exactly, no spaces).
-              <br />
-              3. Click <strong>Sign in</strong>.
+  if (!meOk) {
+    return (
+      <>
+        <Ocean />
+        <div className="login-wrap">
+          <div className="login-card">
+            <h1>Rare Fish</h1>
+            <p className="lead">
+              Админ-панель. Вход по Telegram ID из allowlist и секрету API.
+              После входа выдаётся короткая сессия — сырой секрет в браузере не
+              хранится.
             </p>
-            {error && (
-              <p className="muted" style={{ marginTop: 12 }}>
-                Tip: if you still see Telegram errors, hard-refresh the page
-                (Cmd+Shift+R) after redeploy.
-              </p>
-            )}
-          </div>
-        )}
-
-        {meOk && tab === 'targets' && (
-          <div className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>24h price ramp</h2>
-                <p className="muted">
-                  Set +% / −% with the steppers. After <strong>Start 24h ramp</strong>,
-                  price moves smoothly to that target over 24 hours — it does{' '}
-                  <strong>not</strong> jump immediately. Example: +10 on a fish at
-                  100 → ~110 in 24h.
-                </p>
-              </div>
+            {error && <div className="toast-error">{error}</div>}
+            {okMsg && <div className="toast-ok">{okMsg}</div>}
+            <div className="stack">
+              <label className="field">
+                <span>Telegram ID</span>
+                <input
+                  value={tgId}
+                  onChange={(e) => setTgId(e.target.value)}
+                  placeholder="819826046"
+                  autoComplete="username"
+                />
+              </label>
+              <label className="field">
+                <span>Секрет API (INTERNAL_API_SECRET)</span>
+                <input
+                  type="password"
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  placeholder="из Railway → @rare-fish/api"
+                  autoComplete="current-password"
+                />
+              </label>
               <button
                 type="button"
-                className="primary"
+                className="btn btn-primary"
                 disabled={busy}
-                onClick={saveAllTargets}
+                onClick={signIn}
               >
-                {busy ? 'Starting…' : 'Start 24h ramp'}
+                {busy ? 'Вход…' : 'Войти'}
               </button>
             </div>
+            <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
+              ID должен быть в <code>ADMIN_TELEGRAM_IDS</code>. Секрет — переменная{' '}
+              <code>INTERNAL_API_SECRET</code> или <code>ADMIN_API_SECRET</code>.
+            </p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
-            <div className="row header targets-grid">
-              <div>Fish</div>
-              <div>Now → target</div>
-              <div>Ramp</div>
-              <div>% / 24h</div>
-            </div>
-            {fish.map((f) => {
-              const pct = Number(targets[f.id] ?? 0);
-              const price = Number(f.currentPrice);
-              const preview =
-                Number.isFinite(price) && Number.isFinite(pct)
-                  ? price * (1 + pct / 100)
-                  : null;
-              const active =
-                f.rampEndAt && new Date(f.rampEndAt).getTime() > Date.now();
-              return (
-                <div key={f.id} className="row targets-grid">
-                  <div>
-                    <strong>{f.symbol}</strong>
-                    <div className="muted">{f.name}</div>
+  return (
+    <>
+      <Ocean />
+      <div className="layout">
+        <aside className="side">
+          <div className="brand">
+            Rare Fish
+            <span>Админ-панель</span>
+          </div>
+          <nav>
+            {NAV.map((item, i) => (
+              <div key={item.id}>
+                {item.group && (i === 0 || NAV[i - 1]?.group !== item.group) ? (
+                  <div className="nav-group">{item.group}</div>
+                ) : null}
+                <button
+                  type="button"
+                  className={`nav-btn${tab === item.id ? ' active' : ''}`}
+                  onClick={() => {
+                    setTab(item.id);
+                    setOkMsg(null);
+                    setError(null);
+                  }}
+                >
+                  {item.label}
+                </button>
+              </div>
+            ))}
+          </nav>
+          <div className="side-foot">
+            <div className="session-chip">
+              <div>
+                <div className="dim">Сессия</div>
+                <div className="mono" style={{ fontSize: 12 }}>
+                  tg {tgId || '—'}
+                </div>
+                {sessionExp ? (
+                  <div className="dim" style={{ fontSize: 11 }}>
+                    до {when(sessionExp)}
                   </div>
-                  <div className="mono">
-                    {n(f.currentPrice, 2)}
-                    {preview != null && pct !== 0 ? (
-                      <>
-                        {' → '}
-                        <span className="ok">{n(preview, 2)}</span>
-                      </>
+                ) : null}
+              </div>
+              <button type="button" className="btn btn-sm" onClick={signOut}>
+                Выйти
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <main className="main">
+          {error && <div className="toast-error">{error}</div>}
+          {okMsg && <div className="toast-ok">{okMsg}</div>}
+
+          {tab === 'dashboard' && dash && (
+            <>
+              <div className="grid-stats">
+                <div className="stat">
+                  <div className="label">Пользователи</div>
+                  <div className="value">{n(dash.users as number, 0)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Активны 24ч</div>
+                  <div className="value">{n(dash.activeUsers24h as number, 0)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Кредиты в игре</div>
+                  <div className="value">{n(dash.totalGameCredits as string)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Объём торгов</div>
+                  <div className="value">{n(dash.tradingVolume as string)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Сделок</div>
+                  <div className="value">{n(dash.tradesCount as number, 0)}</div>
+                </div>
+              </div>
+              <div className="detail-grid">
+                <div className="panel">
+                  <h2>Топ рыб</h2>
+                  {((dash.topFish as Fish[]) || []).map((f) => (
+                    <div key={f.id} className="row" style={{ gridTemplateColumns: '1fr 0.6fr 0.7fr 0.5fr' }}>
+                      <div>{f.name}</div>
+                      <div className="mono muted">{f.symbol}</div>
+                      <div className="mono">{n(f.currentPrice ?? f.price)}</div>
+                      <div className={`mono ${Number(f.change ?? f.dailyChangePercent) >= 0 ? 'ok' : 'down'}`}>
+                        {n(f.change ?? f.dailyChangePercent, 1)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="panel">
+                  <h2>Топ портфелей</h2>
+                  {((dash.topUsers as Array<{
+                    id: string;
+                    displayName: string;
+                    portfolioValue: string;
+                    telegramId: string;
+                  }>) || []).map((u) => (
+                    <div key={u.id} className="row" style={{ gridTemplateColumns: '1.4fr 1fr' }}>
+                      <div>
+                        {u.displayName}{' '}
+                        <span className="muted mono">{u.telegramId}</span>
+                      </div>
+                      <div className="mono ok">{n(u.portfolioValue)} CR</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === 'targets' && (
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Рампа цены на 24 часа</h2>
+                  <p className="muted">
+                    Задайте целевой ±%. После «Запустить» цена плавно идёт к
+                    цели за сутки — без мгновенного скачка.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={busy}
+                  onClick={saveAllTargets}
+                >
+                  {busy ? 'Запуск…' : 'Запустить рампу 24ч'}
+                </button>
+              </div>
+              <div className="row header targets-grid">
+                <div>Рыба</div>
+                <div>Сейчас → цель</div>
+                <div>Прогресс</div>
+                <div>% / 24ч</div>
+              </div>
+              {fish.map((f) => {
+                const pct = Number(targets[f.id] ?? 0);
+                const price = Number(f.currentPrice);
+                const preview =
+                  Number.isFinite(price) && Number.isFinite(pct)
+                    ? price * (1 + pct / 100)
+                    : null;
+                const active =
+                  f.rampEndAt && new Date(f.rampEndAt).getTime() > Date.now();
+                return (
+                  <div key={f.id} className="row targets-grid">
+                    <div>
+                      <strong>{f.symbol}</strong>
+                      <div className="muted">{f.name}</div>
+                    </div>
+                    <div className="mono">
+                      {n(f.currentPrice, 2)}
+                      {preview != null && pct !== 0 ? (
+                        <>
+                          {' → '}
+                          <span className="ok">{n(preview, 2)}</span>
+                        </>
+                      ) : null}
+                    </div>
+                    <div>
+                      {active && f.rampToPrice != null ? (
+                        <>
+                          <div className="muted" style={{ fontSize: 12 }}>
+                            → {n(f.rampToPrice, 2)}
+                            {f.rampProgress != null
+                              ? ` · ${Math.round(f.rampProgress * 100)}%`
+                              : ''}
+                          </div>
+                          <div className="progress">
+                            <i
+                              style={{
+                                width: `${Math.round((f.rampProgress ?? 0) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <span className="dim">ожидание</span>
+                      )}
+                    </div>
+                    <div className="stepper">
+                      <button type="button" className="btn btn-sm" onClick={() => bumpTarget(f.id, -5)}>−5</button>
+                      <button type="button" className="btn btn-sm" onClick={() => bumpTarget(f.id, -1)}>−</button>
+                      <input
+                        className="target-input"
+                        inputMode="decimal"
+                        value={targets[f.id] ?? '0'}
+                        onChange={(e) =>
+                          setTargets((prev) => ({
+                            ...prev,
+                            [f.id]: e.target.value,
+                          }))
+                        }
+                      />
+                      <button type="button" className="btn btn-sm" onClick={() => bumpTarget(f.id, 1)}>+</button>
+                      <button type="button" className="btn btn-sm" onClick={() => bumpTarget(f.id, 5)}>+5</button>
+                      <button type="button" className="btn btn-sm" onClick={() => bumpTarget(f.id, 10)}>+10</button>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="toolbar" style={{ marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    const next: Record<string, string> = {};
+                    for (const f of fish) next[f.id] = '0';
+                    setTargets(next);
+                  }}
+                >
+                  Все в 0 (сброс рамп при сохранении)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab === 'fish' && (
+            <div className="panel">
+              <h2>Ручная цена и заморозка</h2>
+              <p className="muted" style={{ marginBottom: 12 }}>
+                Для плавного +10% за день используйте «Рампа 24ч», не этот раздел.
+              </p>
+              <div className="row header">
+                <div>Название</div>
+                <div>Цена</div>
+                <div>Изм.</div>
+                <div>Действия</div>
+              </div>
+              {fish.map((f) => (
+                <div key={f.id} className="row">
+                  <div>
+                    {f.name}{' '}
+                    <span className="muted mono">{f.symbol}</span>
+                    {f.isFrozen ? (
+                      <span className="badge badge-warn" style={{ marginLeft: 8 }}>
+                        фриз
+                      </span>
                     ) : null}
                   </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {active && f.rampToPrice != null ? (
-                      <>
-                        live → {n(f.rampToPrice, 2)}
-                        {f.rampProgress != null
-                          ? ` · ${Math.round(f.rampProgress * 100)}%`
-                          : ''}
-                      </>
-                    ) : (
-                      'idle'
-                    )}
+                  <div className="mono">{n(f.currentPrice)}</div>
+                  <div className={`mono ${Number(f.dailyChangePercent) >= 0 ? 'ok' : 'down'}`}>
+                    {n(f.dailyChangePercent, 1)}%
                   </div>
-                  <div className="stepper">
-                    <button type="button" onClick={() => bumpTarget(f.id, -5)}>
-                      −5
+                  <div className="actions">
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={async () => {
+                        const raw = window.prompt(
+                          'Новая цена',
+                          String(Number(f.currentPrice)),
+                        );
+                        if (!raw) return;
+                        const reason =
+                          window.prompt('Причина', 'ручная цена') || 'ручная цена';
+                        await adminApi.setPrice(f.id, Number(raw), reason);
+                        setFish(await adminApi.fish());
+                        setOkMsg(`Цена ${f.symbol} → ${raw}`);
+                      }}
+                    >
+                      Цена
                     </button>
-                    <button type="button" onClick={() => bumpTarget(f.id, -1)}>
-                      −
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={async () => {
+                        if (f.isFrozen) await adminApi.unfreeze(f.id);
+                        else await adminApi.freeze(f.id);
+                        setFish(await adminApi.fish());
+                      }}
+                    >
+                      {f.isFrozen ? 'Разморозить' : 'Заморозить'}
                     </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === 'users' && (
+            <>
+              <div className="toolbar">
+                <label className="field" style={{ flex: 2 }}>
+                  <span>Поиск</span>
+                  <input
+                    placeholder="username или telegram id"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        void adminApi.users(q || undefined).then(setUsers);
+                      }
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={async () => setUsers(await adminApi.users(q || undefined))}
+                >
+                  Найти
+                </button>
+              </div>
+              <div className="panel">
+                {users.map((u) => (
+                  <div key={u.id} className="row">
+                    <div>
+                      {u.username || u.firstName || 'User'}{' '}
+                      {u.status === 'BANNED' ? (
+                        <span className="badge badge-danger">бан</span>
+                      ) : (
+                        <span className="badge">{u.status}</span>
+                      )}
+                      {u.isAdmin ? (
+                        <span className="badge" style={{ marginLeft: 4 }}>
+                          admin
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mono">{String(u.telegramId)}</div>
+                    <div className="mono">{n(u.gameBalance?.available)} CR</div>
+                    <div className="actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={async () => {
+                          const detail = await adminApi.user(u.id);
+                          setSelectedUser(detail);
+                          setBalanceInput(
+                            String(Number(detail.gameBalance?.available ?? 0)),
+                          );
+                          setBalanceReason('пополнение админом');
+                          setOkMsg(null);
+                          setError(null);
+                        }}
+                      >
+                        Открыть
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger"
+                        onClick={async () => {
+                          if (u.status === 'BANNED') await adminApi.unban(u.id);
+                          else {
+                            const reason =
+                              window.prompt('Причина бана', 'нарушение') ||
+                              'бан';
+                            await adminApi.ban(u.id, reason);
+                          }
+                          setUsers(await adminApi.users(q || undefined));
+                          if (selectedUser?.id === u.id) {
+                            setSelectedUser(await adminApi.user(u.id));
+                          }
+                        }}
+                      >
+                        {u.status === 'BANNED' ? 'Разбан' : 'Бан'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {selectedUser && (
+                <div className="panel">
+                  <h2>
+                    {selectedUser.username || selectedUser.firstName || '—'}
+                  </h2>
+                  <p className="muted" style={{ marginBottom: 12 }}>
+                    tg {String(selectedUser.telegramId)} · {selectedUser.status}
+                    {selectedUser.isAdmin ? ' · admin' : ''}
+                  </p>
+                  <div className="stat" style={{ marginBottom: 14, maxWidth: 240 }}>
+                    <div className="label">Баланс</div>
+                    <div className="value">
+                      {n(selectedUser.gameBalance?.available)} CR
+                    </div>
+                  </div>
+
+                  <div className="toolbar">
+                    <label className="field">
+                      <span>Установить баланс</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={balanceInput}
+                        onChange={(e) => setBalanceInput(e.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Причина</span>
+                      <input
+                        value={balanceReason}
+                        onChange={(e) => setBalanceReason(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy}
+                      onClick={async () => {
+                        const balance = Number(balanceInput);
+                        if (!Number.isFinite(balance) || balance < 0) {
+                          setError('Введите баланс ≥ 0');
+                          return;
+                        }
+                        const reason =
+                          balanceReason.trim() || 'установка баланса';
+                        setBusy(true);
+                        setError(null);
+                        try {
+                          const updated = await adminApi.setBalance(
+                            selectedUser.id,
+                            balance,
+                            reason,
+                          );
+                          setSelectedUser(updated);
+                          setUsers(await adminApi.users(q || undefined));
+                          setOkMsg(
+                            `Баланс → ${n(updated.gameBalance?.available)} CR`,
+                          );
+                        } catch (e) {
+                          setError(
+                            e instanceof Error ? e.message : 'Ошибка баланса',
+                          );
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Установить
+                    </button>
+                  </div>
+
+                  <div className="actions" style={{ marginBottom: 14 }}>
+                    {[100, 500, 1000, 3000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => setBalanceInput(String(amt))}
+                      >
+                        {amt}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="toolbar">
+                    <label className="field">
+                      <span>Корректировка (+/−)</span>
+                      <input
+                        value={adjustDelta}
+                        onChange={(e) => setAdjustDelta(e.target.value)}
+                        placeholder="50 или -20"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={busy}
+                      onClick={async () => {
+                        const amount = Number(adjustDelta);
+                        if (!Number.isFinite(amount) || amount === 0) {
+                          setError('Укажите ненулевую сумму');
+                          return;
+                        }
+                        setBusy(true);
+                        try {
+                          const updated = await adminApi.adjustBalance(
+                            selectedUser.id,
+                            amount,
+                            balanceReason.trim() || 'корректировка',
+                          );
+                          setSelectedUser(updated);
+                          setBalanceInput(
+                            String(Number(updated.gameBalance?.available ?? 0)),
+                          );
+                          setUsers(await adminApi.users(q || undefined));
+                          setOkMsg(
+                            `Изменение ${amount > 0 ? '+' : ''}${amount} → ${n(updated.gameBalance?.available)} CR`,
+                          );
+                        } catch (e) {
+                          setError(
+                            e instanceof Error ? e.message : 'Ошибка корректировки',
+                          );
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Применить +/−
+                    </button>
+                  </div>
+
+                  <div className="detail-grid" style={{ marginTop: 8 }}>
+                    <div>
+                      <h2 style={{ fontSize: '1rem' }}>Портфель</h2>
+                      <div className="list-compact">
+                        {(selectedUser.portfolioPositions || []).map((p, i) => (
+                          <div key={i} className="item">
+                            <span>{p.fish.symbol}</span>
+                            <span className="mono">
+                              ×{n(p.quantity, 4)} @ {n(p.fish.currentPrice)}
+                            </span>
+                          </div>
+                        ))}
+                        {!selectedUser.portfolioPositions?.length && (
+                          <div className="muted">Пусто</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize: '1rem' }}>Ledger</h2>
+                      <div className="list-compact">
+                        {(selectedUser.ledgerEntries || []).slice(0, 12).map((e, i) => (
+                          <div key={i} className="item">
+                            <span>{e.type}</span>
+                            <span className="mono">
+                              {n(e.amount)} · {when(e.createdAt)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {tab === 'payments' && (
+            <>
+              <div className="panel">
+                <h2>Оракул TON</h2>
+                <pre
+                  className="mono"
+                  style={{ whiteSpace: 'pre-wrap', fontSize: 12, margin: 0 }}
+                >
+                  {JSON.stringify(oracle, null, 2)}
+                </pre>
+              </div>
+              <div className="panel">
+                <h2>Провайдеры</h2>
+                {payments.map((p) => (
+                  <div key={p.code} className="row">
+                    <div>{p.code}</div>
+                    <div className={p.isEnabled ? 'ok' : 'muted'}>
+                      {p.isEnabled ? 'ВКЛ' : 'ВЫКЛ'}
+                    </div>
+                    <div className="mono">комиссия {n(p.feePercent, 2)}%</div>
+                    <div className="actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={async () => {
+                          await adminApi.patchPayment(p.code, {
+                            isEnabled: !p.isEnabled,
+                          });
+                          setPayments(await adminApi.paymentSettings());
+                        }}
+                      >
+                        Переключить
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {tab === 'deposits' && (
+            <div className="panel">
+              <h2>Последние депозиты</h2>
+              {deposits.map((d) => (
+                <div key={d.id} className="row">
+                  <div>
+                    {d.provider} · {d.status}
+                  </div>
+                  <div className="mono">{n(d.assetAmount)}</div>
+                  <div className="mono">{n(d.gameCreditAmount)}</div>
+                  <div className="muted">
+                    {d.user?.username || d.user?.telegramId} · {when(d.createdAt)}
+                  </div>
+                </div>
+              ))}
+              {!deposits.length && <p className="muted">Пока пусто</p>}
+            </div>
+          )}
+
+          {tab === 'events' && (
+            <>
+              <div className="panel">
+                <h2>Новое рыночное событие</h2>
+                <p className="muted" style={{ marginBottom: 12 }}>
+                  Множитель цены на период (например 1.15 = +15% к движению).
+                </p>
+                <div className="toolbar">
+                  <label className="field">
+                    <span>Название</span>
                     <input
-                      className="target-input"
-                      inputMode="decimal"
-                      value={targets[f.id] ?? '0'}
+                      value={eventForm.name}
                       onChange={(e) =>
-                        setTargets((prev) => ({
-                          ...prev,
-                          [f.id]: e.target.value,
+                        setEventForm((f) => ({ ...f, name: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Множитель</span>
+                    <input
+                      value={eventForm.priceMultiplier}
+                      onChange={(e) =>
+                        setEventForm((f) => ({
+                          ...f,
+                          priceMultiplier: e.target.value,
                         }))
                       }
                     />
-                    <button type="button" onClick={() => bumpTarget(f.id, 1)}>
-                      +
-                    </button>
-                    <button type="button" onClick={() => bumpTarget(f.id, 5)}>
-                      +5
-                    </button>
-                    <button type="button" onClick={() => bumpTarget(f.id, 10)}>
-                      +10
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-
-            <div className="toolbar" style={{ marginTop: 16 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const next: Record<string, string> = {};
-                  for (const f of fish) next[f.id] = '0';
-                  setTargets(next);
-                }}
-              >
-                All 0 (cancel ramps on save)
-              </button>
-            </div>
-          </div>
-        )}
-
-        {meOk && tab === 'fish' && (
-          <div className="panel">
-            <h2>Manual override</h2>
-            <p className="muted">
-              Freeze trading or set an exact price. For +10% over a day use{' '}
-              <strong>24h price ramp</strong> — not this tab.
-            </p>
-            <div className="row header">
-              <div>Name</div>
-              <div>Price</div>
-              <div>Change</div>
-              <div>Actions</div>
-            </div>
-            {fish.map((f) => (
-              <div key={f.id} className="row">
-                <div>
-                  {f.name}{' '}
-                  <span className="muted mono">{f.symbol}</span>
-                  {f.isFrozen ? ' · frozen' : ''}
-                </div>
-                <div className="mono">{n(f.currentPrice)}</div>
-                <div className="mono">{n(f.dailyChangePercent, 1)}%</div>
-                <div className="actions">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const raw = prompt('New price', String(Number(f.currentPrice)));
-                      if (!raw) return;
-                      await adminApi.setPrice(f.id, Number(raw));
-                      setFish(await adminApi.fish());
-                    }}
-                  >
-                    Set price
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (f.isFrozen) await adminApi.unfreeze(f.id);
-                      else await adminApi.freeze(f.id);
-                      setFish(await adminApi.fish());
-                    }}
-                  >
-                    {f.isFrozen ? 'Unfreeze' : 'Freeze'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {meOk && tab === 'dashboard' && dash && (
-          <>
-            <div className="grid">
-              <div className="stat">
-                <div className="label">Users</div>
-                <div className="value">{n(dash.users as number, 0)}</div>
-              </div>
-              <div className="stat">
-                <div className="label">Active 24h</div>
-                <div className="value">{n(dash.activeUsers24h as number, 0)}</div>
-              </div>
-              <div className="stat">
-                <div className="label">Game credits</div>
-                <div className="value">{n(dash.totalGameCredits as string)}</div>
-              </div>
-              <div className="stat">
-                <div className="label">Trade volume</div>
-                <div className="value">{n(dash.tradingVolume as string)}</div>
-              </div>
-            </div>
-            <div className="panel">
-              <h2>Top fish</h2>
-              {((dash.topFish as Fish[]) || []).map((f) => (
-                <div key={f.id} className="row">
-                  <div>{f.name}</div>
-                  <div className="mono">{f.symbol}</div>
-                  <div className="mono">{n(f.currentPrice ?? f.price)}</div>
-                  <div className="mono">{n(f.change ?? f.dailyChangePercent, 1)}%</div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {meOk && tab === 'users' && (
-          <>
-            <div className="toolbar">
-              <input
-                placeholder="Search username / telegram id"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={async () => setUsers(await adminApi.users(q || undefined))}
-              >
-                Search
-              </button>
-            </div>
-            <div className="panel">
-              {users.map((u) => (
-                <div key={u.id} className="row">
-                  <div>
-                    {u.username || u.firstName || 'User'}{' '}
-                    <span className="muted">{u.status}</span>
-                    {u.isAdmin ? ' · admin' : ''}
-                  </div>
-                  <div className="mono">{String(u.telegramId)}</div>
-                  <div className="mono">{n(u.gameBalance?.available)}</div>
-                  <div className="actions">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const detail = await adminApi.user(u.id);
-                        setSelectedUser(detail);
-                        setBalanceInput(
-                          String(Number(detail.gameBalance?.available ?? 0)),
-                        );
-                        setBalanceReason('admin top-up');
-                        setOkMsg(null);
-                        setError(null);
-                      }}
+                  </label>
+                  <label className="field">
+                    <span>Рыба (опц.)</span>
+                    <select
+                      value={eventForm.fishId}
+                      onChange={(e) =>
+                        setEventForm((f) => ({ ...f, fishId: e.target.value }))
+                      }
                     >
-                      Open
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={async () => {
-                        if (u.status === 'BANNED') await adminApi.unban(u.id);
-                        else await adminApi.ban(u.id);
-                        setUsers(await adminApi.users(q || undefined));
-                      }}
-                    >
-                      {u.status === 'BANNED' ? 'Unban' : 'Ban'}
-                    </button>
-                  </div>
+                      <option value="">Все</option>
+                      {fish.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.symbol}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
-              ))}
-            </div>
-            {selectedUser && (
-              <div className="panel">
-                <h2>
-                  User · {selectedUser.username || selectedUser.firstName || '—'}
-                </h2>
-                <p className="muted" style={{ marginBottom: 12 }}>
-                  tg {String(selectedUser.telegramId)} · status {selectedUser.status}
-                  {selectedUser.isAdmin ? ' · admin' : ''}
-                </p>
-                <div className="stat" style={{ marginBottom: 14, maxWidth: 220 }}>
-                  <div className="label">Current balance</div>
-                  <div className="value">
-                    {n(selectedUser.gameBalance?.available)} CR
-                  </div>
-                </div>
-
-                <div className="toolbar" style={{ alignItems: 'flex-end' }}>
-                  <label style={{ display: 'grid', gap: 4, flex: 1 }}>
-                    <span className="muted">Set balance to</span>
+                <div className="toolbar">
+                  <label className="field">
+                    <span>Начало</span>
                     <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      placeholder="3000"
-                      value={balanceInput}
-                      onChange={(e) => setBalanceInput(e.target.value)}
+                      type="datetime-local"
+                      value={eventForm.startTime}
+                      onChange={(e) =>
+                        setEventForm((f) => ({
+                          ...f,
+                          startTime: e.target.value,
+                        }))
+                      }
                     />
                   </label>
-                  <label style={{ display: 'grid', gap: 4, flex: 1 }}>
-                    <span className="muted">Reason</span>
+                  <label className="field">
+                    <span>Конец</span>
                     <input
-                      value={balanceReason}
-                      onChange={(e) => setBalanceReason(e.target.value)}
-                      placeholder="admin top-up"
+                      type="datetime-local"
+                      value={eventForm.endTime}
+                      onChange={(e) =>
+                        setEventForm((f) => ({ ...f, endTime: e.target.value }))
+                      }
                     />
                   </label>
                   <button
                     type="button"
-                    className="primary"
+                    className="btn btn-primary"
                     disabled={busy}
                     onClick={async () => {
-                      const balance = Number(balanceInput);
-                      if (!Number.isFinite(balance) || balance < 0) {
-                        setError('Enter a valid balance ≥ 0');
+                      if (!eventForm.name || !eventForm.startTime || !eventForm.endTime) {
+                        setError('Заполните название и даты');
                         return;
                       }
-                      const reason = balanceReason.trim() || 'admin set-balance';
-                      setBusy(true);
-                      setError(null);
-                      setOkMsg(null);
-                      try {
-                        const updated = await adminApi.setBalance(
-                          selectedUser.id,
-                          balance,
-                          reason,
-                        );
-                        setSelectedUser(updated);
-                        setBalanceInput(String(balance));
-                        setUsers(await adminApi.users(q || undefined));
-                        setOkMsg(
-                          `Balance set to ${n(updated.gameBalance?.available)} CR`,
-                        );
-                      } catch (e) {
-                        setError(e instanceof Error ? e.message : 'Set balance failed');
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    Set balance
-                  </button>
-                </div>
-
-                <div className="actions" style={{ marginTop: 12 }}>
-                  {[100, 500, 1000, 3000].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setBalanceInput(String(amt))}
-                    >
-                      {amt}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const amount = Number(prompt('Adjust amount (+/-)', '50'));
-                      if (!Number.isFinite(amount) || amount === 0) return;
-                      const reason =
-                        prompt('Reason', 'admin adjust') || 'admin adjust';
                       setBusy(true);
                       try {
-                        const updated = await adminApi.adjustBalance(
-                          selectedUser.id,
-                          amount,
-                          reason,
-                        );
-                        setSelectedUser(updated);
-                        setUsers(await adminApi.users(q || undefined));
-                        setOkMsg(
-                          `Adjusted by ${amount > 0 ? '+' : ''}${amount} → ${n(updated.gameBalance?.available)} CR`,
-                        );
+                        await adminApi.createEvent({
+                          name: eventForm.name,
+                          description: eventForm.description || undefined,
+                          fishId: eventForm.fishId || undefined,
+                          priceMultiplier: Number(eventForm.priceMultiplier),
+                          startTime: new Date(eventForm.startTime).toISOString(),
+                          endTime: new Date(eventForm.endTime).toISOString(),
+                        });
+                        setEvents(await adminApi.events());
+                        setOkMsg('Событие создано');
+                        setEventForm((f) => ({ ...f, name: '', description: '' }));
                       } catch (e) {
                         setError(
-                          e instanceof Error ? e.message : 'Adjust failed',
+                          e instanceof Error ? e.message : 'Не удалось создать',
                         );
                       } finally {
                         setBusy(false);
                       }
                     }}
                   >
-                    Adjust +/-
+                    Создать
                   </button>
                 </div>
               </div>
-            )}
-          </>
-        )}
-
-        {meOk && tab === 'payments' && (
-          <>
-            <div className="panel">
-              <h2>Oracle</h2>
-              <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>
-                {JSON.stringify(oracle, null, 2)}
-              </pre>
-            </div>
-            <div className="panel">
-              <h2>Providers</h2>
-              {payments.map((p) => (
-                <div key={p.code} className="row">
-                  <div>{p.code}</div>
-                  <div className={p.isEnabled ? 'ok' : 'muted'}>
-                    {p.isEnabled ? 'ON' : 'OFF'}
+              <div className="panel">
+                <h2>События</h2>
+                {events.map((ev) => (
+                  <div key={ev.id} className="row">
+                    <div>
+                      {ev.name}{' '}
+                      {ev.isActive ? (
+                        <span className="badge">активно</span>
+                      ) : (
+                        <span className="badge badge-warn">выкл</span>
+                      )}
+                      <div className="muted">
+                        {ev.fish?.symbol || 'все'} · ×{n(ev.priceMultiplier, 2)}
+                      </div>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {when(ev.startTime)}
+                    </div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {when(ev.endTime)}
+                    </div>
+                    <div className="actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={async () => {
+                          if (ev.isActive) await adminApi.deactivateEvent(ev.id);
+                          else await adminApi.activateEvent(ev.id);
+                          setEvents(await adminApi.events());
+                        }}
+                      >
+                        {ev.isActive ? 'Выключить' : 'Включить'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="mono">fee {n(p.feePercent, 2)}%</div>
-                  <div className="actions">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await adminApi.patchPayment(p.code, {
-                          isEnabled: !p.isEnabled,
-                        });
-                        setPayments(await adminApi.paymentSettings());
-                      }}
-                    >
-                      Toggle
-                    </button>
+                ))}
+                {!events.length && <p className="muted">Событий нет</p>}
+              </div>
+            </>
+          )}
+
+          {tab === 'casino' && casino && (
+            <>
+              <div className="grid-stats">
+                <div className="stat">
+                  <div className="label">Открытий всего</div>
+                  <div className="value">{n(casino.openingsTotal, 0)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Открытий 24ч</div>
+                  <div className="value">{n(casino.openings24h, 0)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Потрачено 24ч</div>
+                  <div className="value">{n(casino.spent24h)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Выдано value 24ч</div>
+                  <div className="value">{n(casino.value24h)}</div>
+                </div>
+              </div>
+              <div className="panel">
+                <h2>Кейсы</h2>
+                {casino.cases.map((c) => (
+                  <div key={c.id} className="row">
+                    <div>
+                      {c.name} <span className="muted mono">{c.code}</span>
+                      {!c.isActive && (
+                        <span className="badge badge-warn" style={{ marginLeft: 6 }}>
+                          выкл
+                        </span>
+                      )}
+                    </div>
+                    <div className="mono">{n(c.priceCredits)} CR</div>
+                    <div className="mono">edge {n(c.edgePercent, 1)}%</div>
+                    <div className="muted">{c.openings} откр.</div>
+                  </div>
+                ))}
+              </div>
+              <div className="panel">
+                <h2>Недавние открытия</h2>
+                {casino.recent.map((o) => (
+                  <div key={o.id} className="row">
+                    <div>
+                      {o.case} → <strong>{o.fish}</strong>
+                    </div>
+                    <div className="mono">{n(o.paid)}</div>
+                    <div className="mono ok">{n(o.value)}</div>
+                    <div className="muted">
+                      {o.user} · {when(o.createdAt)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {tab === 'audit' && (
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Журнал действий админов</h2>
+                  <p className="muted">Все чувствительные операции с датой и автором.</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={async () => setAudit(await adminApi.audit())}
+                >
+                  Обновить
+                </button>
+              </div>
+              <div className="row header audit-grid">
+                <div>Действие</div>
+                <div>Сущность</div>
+                <div>Админ</div>
+                <div>Когда</div>
+              </div>
+              {audit.map((a) => (
+                <div key={a.id} className="row audit-grid">
+                  <div>
+                    <strong>{a.actionType}</strong>
+                  </div>
+                  <div className="muted mono" style={{ fontSize: 12 }}>
+                    {a.entityType}
+                  </div>
+                  <div className="muted">
+                    {a.adminUser?.username ||
+                      a.adminUser?.firstName ||
+                      String(a.adminUser?.telegramId ?? '—')}
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {when(a.createdAt)}
                   </div>
                 </div>
               ))}
+              {!audit.length && <p className="muted">Пока записей нет</p>}
             </div>
-          </>
-        )}
+          )}
 
-        {meOk && tab === 'deposits' && (
-          <div className="panel">
-            <h2>Recent deposits</h2>
-            {deposits.map((d) => (
-              <div key={d.id} className="row">
-                <div>
-                  {d.provider} · {d.status}
+          {tab === 'security' && security && (
+            <>
+              <div className="grid-stats">
+                <div className="stat">
+                  <div className="label">Забанено</div>
+                  <div className="value">{n(security.bannedUsers, 0)}</div>
                 </div>
-                <div className="mono">{n(d.assetAmount)}</div>
-                <div className="mono">{n(d.gameCreditAmount)}</div>
-                <div className="muted">
-                  {d.user?.username || d.user?.telegramId} ·{' '}
-                  {new Date(d.createdAt).toLocaleString()}
+                <div className="stat">
+                  <div className="label">Админов</div>
+                  <div className="value">{n(security.adminUsers, 0)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Действий 24ч</div>
+                  <div className="value">{n(security.adminActions24h, 0)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Новых юзеров 24ч</div>
+                  <div className="value">{n(security.newUsers24h, 0)}</div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
+              <div className="panel">
+                <h2>Статус защиты</h2>
+                {(
+                  [
+                    ['Секрет админки настроен', security.adminSecretConfigured],
+                    ['Сессионный вход включён', security.sessionAuthEnabled],
+                    ['Telegram bot token', security.telegramBotConfigured],
+                    ['CORS allowlist (CORS_ORIGINS)', security.corsConfigured],
+                  ] as const
+                ).map(([label, on]) => (
+                  <div key={label} className="check">
+                    <span className={`dot${on ? '' : ' off'}`} />
+                    <span>
+                      {label}
+                      {!on && label.includes('CORS') ? (
+                        <span className="muted">
+                          {' '}
+                          — задайте CORS_ORIGINS=https://… на API
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                ))}
+                <p className="muted" style={{ marginTop: 14 }}>
+                  Лимит запросов: {security.rateLimitMax}/мин на IP. Мутации
+                  админки дополнительно ограничены. Забаненные пользователи не
+                  могут пользоваться приложением. Сессия админа живёт ~8 часов и
+                  хранится в sessionStorage.
+                </p>
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+    </>
   );
 }

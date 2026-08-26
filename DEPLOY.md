@@ -57,6 +57,10 @@ TELEGRAM_MINI_APP_NAME=app
 INTERNAL_API_SECRET=<long random string>
 ADMIN_API_SECRET=<long random string — used to sign into /admin>
 ADMIN_TELEGRAM_IDS=<your telegram user id>
+# Optional hardening:
+# CORS_ORIGINS=https://your-web.up.railway.app,https://web-production-xxxx.up.railway.app
+# RATE_LIMIT_MAX=120
+# RATE_LIMIT_WINDOW_MS=60000
 STARS_TO_GAME_CREDIT_RATE=1
 STARS_DEPOSIT_FEE_PERCENT=0
 STAR_USD_PRICE=0.02

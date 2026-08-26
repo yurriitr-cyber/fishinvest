@@ -6,23 +6,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { validate, parse, InitData } from '@telegram-apps/init-data-node';
-import { timingSafeEqual } from 'crypto';
+import {
+  getAdminConfiguredSecret,
+  headerValue,
+  secretsEqual,
+  verifyAdminSession,
+} from '../../security/security';
 
 export const INIT_DATA_KEY = 'initData';
-
-function headerValue(headers: Record<string, unknown>, name: string): string {
-  const raw = headers[name] ?? headers[name.toLowerCase()];
-  if (Array.isArray(raw)) return String(raw[0] ?? '').trim();
-  if (raw == null) return '';
-  return String(raw).trim();
-}
-
-function secretsEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  if (left.length !== right.length || left.length === 0) return false;
-  return timingSafeEqual(left, right);
-}
 
 @Injectable()
 export class TmaAuthGuard implements CanActivate {
@@ -31,25 +22,39 @@ export class TmaAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization || '';
-    const [authType, authData] = authHeader.split(' ');
+    const [authType, authData] = String(authHeader).split(' ');
 
     if (authType !== 'tma' || !authData) {
       throw new UnauthorizedException('Missing or invalid Authorization header');
     }
 
     const botToken = this.config.get<string>('TELEGRAM_BOT_TOKEN');
-    const configuredSecret = (
-      process.env.ADMIN_API_SECRET ||
-      this.config.get<string>('ADMIN_API_SECRET') ||
-      process.env.INTERNAL_API_SECRET ||
-      this.config.get<string>('INTERNAL_API_SECRET') ||
-      ''
-    ).trim();
+    const configuredSecret = getAdminConfiguredSecret();
 
     const providedSecret = headerValue(request.headers, 'x-admin-secret');
+    const sessionToken = headerValue(request.headers, 'x-admin-session');
     const tgRaw =
       headerValue(request.headers, 'x-admin-telegram-id') ||
       headerValue(request.headers, 'x-dev-telegram-id');
+
+    // Preferred: short-lived signed session (no raw secret on every request)
+    if (sessionToken) {
+      const session = verifyAdminSession(sessionToken);
+      if (!session) {
+        throw new UnauthorizedException('Admin session expired or invalid');
+      }
+      request[INIT_DATA_KEY] = {
+        authDate: new Date(),
+        hash: 'admin-session',
+        signature: 'admin-session',
+        user: {
+          id: session.tgId,
+          firstName: 'Admin',
+          username: 'admin',
+        },
+      } as unknown as InitData;
+      return true;
+    }
 
     // Desktop admin console path — never fall through to Telegram validate
     // when a secret header is present (avoids opaque "Invalid Telegram init data").

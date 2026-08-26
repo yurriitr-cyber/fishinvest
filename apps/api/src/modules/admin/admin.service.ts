@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OracleService } from '../oracle/oracle.service';
+import { getAdminConfiguredSecret } from '../../security/security';
 
 @Injectable()
 export class AdminService {
@@ -603,6 +604,145 @@ export class AdminService {
     });
     await this.log(admin.id, banned ? 'BAN' : 'UNBAN', 'user', userId, before, { after, reason });
     return after;
+  }
+
+  async listAudit(limit = 50, actionType?: string) {
+    return this.prisma.db.adminAction.findMany({
+      where: actionType ? { actionType } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 200),
+      include: {
+        adminUser: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            telegramId: true,
+          },
+        },
+      },
+    });
+  }
+
+  async listEvents(limit = 30) {
+    return this.prisma.db.marketEvent.findMany({
+      orderBy: { startTime: 'desc' },
+      take: Math.min(limit, 100),
+      include: {
+        fish: { select: { id: true, symbol: true, name: true } },
+      },
+    });
+  }
+
+  async setEventActive(admin: User, id: string, isActive: boolean) {
+    const before = await this.prisma.db.marketEvent.findUnique({ where: { id } });
+    if (!before) throw new NotFoundException('Event not found');
+    const after = await this.prisma.db.marketEvent.update({
+      where: { id },
+      data: { isActive },
+      include: { fish: { select: { id: true, symbol: true, name: true } } },
+    });
+    await this.log(
+      admin.id,
+      isActive ? 'ACTIVATE_EVENT' : 'DEACTIVATE_EVENT',
+      'market_event',
+      id,
+      before,
+      after,
+    );
+    return after;
+  }
+
+  async casinoStats() {
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [cases, openingsTotal, openings24h, spendAgg, spend24h] =
+      await Promise.all([
+        this.prisma.db.lootCase.findMany({
+          orderBy: { sortOrder: 'asc' },
+          include: { _count: { select: { openings: true } } },
+        }),
+        this.prisma.db.caseOpening.count(),
+        this.prisma.db.caseOpening.count({
+          where: { createdAt: { gte: since24h } },
+        }),
+        this.prisma.db.caseOpening.aggregate({
+          _sum: { pricePaid: true, fishMarketValue: true },
+        }),
+        this.prisma.db.caseOpening.aggregate({
+          where: { createdAt: { gte: since24h } },
+          _sum: { pricePaid: true, fishMarketValue: true },
+        }),
+      ]);
+
+    const recent = await this.prisma.db.caseOpening.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+      include: {
+        user: { select: { username: true, telegramId: true, firstName: true } },
+        lootCase: { select: { code: true, name: true } },
+        fish: { select: { symbol: true, name: true } },
+      },
+    });
+
+    return {
+      openingsTotal,
+      openings24h,
+      spentTotal: (spendAgg._sum.pricePaid ?? new Prisma.Decimal(0)).toFixed(4),
+      valueTotal: (
+        spendAgg._sum.fishMarketValue ?? new Prisma.Decimal(0)
+      ).toFixed(4),
+      spent24h: (spend24h._sum.pricePaid ?? new Prisma.Decimal(0)).toFixed(4),
+      value24h: (
+        spend24h._sum.fishMarketValue ?? new Prisma.Decimal(0)
+      ).toFixed(4),
+      cases: cases.map((c) => ({
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        priceCredits: c.priceCredits.toFixed(4),
+        edgePercent: c.edgePercent.toFixed(2),
+        isActive: c.isActive,
+        openings: c._count.openings,
+      })),
+      recent: recent.map((o) => ({
+        id: o.id,
+        case: o.lootCase.name,
+        fish: o.fish.symbol,
+        paid: o.pricePaid.toFixed(4),
+        value: o.fishMarketValue.toFixed(4),
+        user: o.user.username || o.user.firstName || String(o.user.telegramId),
+        createdAt: o.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async securityOverview() {
+    const [banned, admins, actions24h, users24h] = await Promise.all([
+      this.prisma.db.user.count({ where: { status: 'BANNED' } }),
+      this.prisma.db.user.count({ where: { isAdmin: true } }),
+      this.prisma.db.adminAction.count({
+        where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      }),
+      this.prisma.db.user.count({
+        where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      }),
+    ]);
+    const secretConfigured = getAdminConfiguredSecret().length >= 8;
+    const cors = (process.env.CORS_ORIGINS || '').trim();
+    return {
+      bannedUsers: banned,
+      adminUsers: admins,
+      adminActions24h: actions24h,
+      newUsers24h: users24h,
+      adminSecretConfigured: secretConfigured,
+      corsConfigured: Boolean(cors && cors !== '*'),
+      telegramBotConfigured: Boolean(
+        process.env.TELEGRAM_BOT_TOKEN &&
+          process.env.TELEGRAM_BOT_TOKEN !== 'your_bot_token_here',
+      ),
+      rateLimitMax: Number(process.env.RATE_LIMIT_MAX || 120),
+      sessionAuthEnabled: true,
+    };
   }
 
   private async log(

@@ -1,20 +1,49 @@
 const TG_ID_KEY = 'rf_admin_tg_id';
-const SECRET_KEY = 'rf_admin_secret';
+const SESSION_KEY = 'rf_admin_session';
+const SESSION_EXP_KEY = 'rf_admin_session_exp';
+
+/** Prefer sessionStorage so the raw secret / token die with the tab. */
+const store = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage;
 
 export function getDevTelegramId() {
-  return localStorage.getItem(TG_ID_KEY) || '';
+  return store.getItem(TG_ID_KEY) || '';
 }
 
 export function setDevTelegramId(id: string) {
-  localStorage.setItem(TG_ID_KEY, id);
+  store.setItem(TG_ID_KEY, id);
 }
 
-export function getAdminSecret() {
-  return localStorage.getItem(SECRET_KEY) || '';
+export function getAdminSession() {
+  const token = store.getItem(SESSION_KEY) || '';
+  const exp = store.getItem(SESSION_EXP_KEY) || '';
+  if (!token) return null;
+  if (exp && new Date(exp).getTime() < Date.now()) {
+    clearAdminSession();
+    return null;
+  }
+  return { token, expiresAt: exp };
 }
 
-export function setAdminSecret(secret: string) {
-  localStorage.setItem(SECRET_KEY, secret);
+export function setAdminSession(token: string, expiresAt: string) {
+  store.setItem(SESSION_KEY, token);
+  store.setItem(SESSION_EXP_KEY, expiresAt);
+}
+
+export function clearAdminSession() {
+  store.removeItem(SESSION_KEY);
+  store.removeItem(SESSION_EXP_KEY);
+}
+
+export function logoutAdmin() {
+  clearAdminSession();
+  store.removeItem(TG_ID_KEY);
+  // migrate away from old localStorage secret if present
+  try {
+    localStorage.removeItem('rf_admin_secret');
+    localStorage.removeItem('rf_admin_tg_id');
+  } catch {
+    /* ignore */
+  }
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -23,18 +52,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   headers.set('Authorization', 'tma unused');
 
   const tgId = getDevTelegramId();
-  const secret = getAdminSecret();
+  const session = getAdminSession();
   if (tgId) {
     headers.set('x-admin-telegram-id', tgId);
-    headers.set('x-dev-telegram-id', tgId);
   }
-  if (secret) {
-    headers.set('x-admin-secret', secret);
+  if (session?.token) {
+    headers.set('x-admin-session', session.token);
   }
 
   const res = await fetch(`/api${path}`, { ...init, headers });
   if (!res.ok) {
-    let message = `HTTP ${res.status}`;
+    let message: string | string[] = `HTTP ${res.status}`;
     try {
       const body = await res.json();
       message = body.message || message;
@@ -48,6 +76,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const adminApi = {
+  login: async (telegramId: number, secret: string) => {
+    const res = await fetch('/api/admin-auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegramId, secret }),
+    });
+    if (!res.ok) {
+      let message: string | string[] = `HTTP ${res.status}`;
+      try {
+        const body = await res.json();
+        message = body.message || message;
+        if (Array.isArray(message)) message = message.join(', ');
+      } catch {
+        /* ignore */
+      }
+      throw new Error(String(message));
+    }
+    return res.json() as Promise<{
+      token: string;
+      expiresAt: string;
+      telegramId: string;
+    }>;
+  },
+
   me: () =>
     request<{ isAdmin: boolean; firstName: string | null; telegramId: string }>(
       '/me',
@@ -65,24 +117,16 @@ export const adminApi = {
         body: JSON.stringify({ targets, durationHours }),
       },
     ),
-  setPrice: (id: string, price: number) =>
+  setPrice: (id: string, price: number, reason?: string) =>
     request(`/admin/fish/${id}/set-price`, {
       method: 'POST',
-      body: JSON.stringify({ price }),
-    }),
-  adjustPercent: (id: string, percent: number) =>
-    request(`/admin/fish/${id}/adjust-percent`, {
-      method: 'POST',
-      body: JSON.stringify({ percent }),
+      body: JSON.stringify({ price, reason }),
     }),
   freeze: (id: string) => request(`/admin/fish/${id}/freeze`, { method: 'POST' }),
   unfreeze: (id: string) =>
     request(`/admin/fish/${id}/unfreeze`, { method: 'POST' }),
-  updateFish: (id: string, data: Record<string, unknown>) =>
-    request(`/admin/fish/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  createEvent: (data: Record<string, unknown>) =>
-    request('/admin/events', { method: 'POST', body: JSON.stringify(data) }),
-  deposits: () => request<Deposit[]>('/admin/deposits'),
+  deposits: (limit = 50) =>
+    request<Deposit[]>(`/admin/deposits?limit=${limit}`),
   oracles: () => request<Record<string, unknown>>('/admin/oracles'),
   paymentSettings: () => request<Payment[]>('/admin/payment-settings'),
   patchPayment: (code: string, data: Record<string, unknown>) =>
@@ -103,10 +147,23 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ balance, reason }),
     }),
-  ban: (id: string) =>
-    request(`/admin/users/${id}/ban`, { method: 'POST', body: '{}' }),
+  ban: (id: string, reason?: string) =>
+    request(`/admin/users/${id}/ban`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
   unban: (id: string) =>
     request(`/admin/users/${id}/unban`, { method: 'POST', body: '{}' }),
+  audit: (limit = 60) => request<AuditItem[]>(`/admin/audit?limit=${limit}`),
+  events: () => request<MarketEvent[]>('/admin/events'),
+  createEvent: (data: Record<string, unknown>) =>
+    request('/admin/events', { method: 'POST', body: JSON.stringify(data) }),
+  activateEvent: (id: string) =>
+    request(`/admin/events/${id}/activate`, { method: 'POST' }),
+  deactivateEvent: (id: string) =>
+    request(`/admin/events/${id}/deactivate`, { method: 'POST' }),
+  casino: () => request<CasinoStats>('/admin/casino'),
+  security: () => request<SecurityOverview>('/admin/security'),
 };
 
 export type Fish = {
@@ -123,12 +180,8 @@ export type Fish = {
   rampEndAt?: string | null;
   rampProgress?: number | null;
   change?: string | number;
-  volatility?: string | number;
-  trend?: string | number;
   isFrozen?: boolean;
   isActive?: boolean;
-  minPrice?: string | number;
-  maxPrice?: string | number;
 };
 
 export type Deposit = {
@@ -176,4 +229,73 @@ export type AdminUserDetail = AdminUser & {
     quantity: string | number;
     fish: { symbol: string; currentPrice: string | number };
   }>;
+  trades?: Array<{
+    side?: string;
+    totalAmount?: string | number;
+    createdAt: string;
+  }>;
+};
+
+export type AuditItem = {
+  id: string;
+  actionType: string;
+  entityType: string;
+  entityId: string;
+  createdAt: string;
+  afterState?: unknown;
+  adminUser?: {
+    username: string | null;
+    firstName: string | null;
+    telegramId: string | number;
+  };
+};
+
+export type MarketEvent = {
+  id: string;
+  name: string;
+  description?: string | null;
+  priceMultiplier: string | number;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+  fish?: { id: string; symbol: string; name: string } | null;
+};
+
+export type CasinoStats = {
+  openingsTotal: number;
+  openings24h: number;
+  spentTotal: string;
+  valueTotal: string;
+  spent24h: string;
+  value24h: string;
+  cases: Array<{
+    id: string;
+    code: string;
+    name: string;
+    priceCredits: string;
+    edgePercent: string;
+    isActive: boolean;
+    openings: number;
+  }>;
+  recent: Array<{
+    id: string;
+    case: string;
+    fish: string;
+    paid: string;
+    value: string;
+    user: string;
+    createdAt: string;
+  }>;
+};
+
+export type SecurityOverview = {
+  bannedUsers: number;
+  adminUsers: number;
+  adminActions24h: number;
+  newUsers24h: number;
+  adminSecretConfigured: boolean;
+  corsConfigured: boolean;
+  telegramBotConfigured: boolean;
+  rateLimitMax: number;
+  sessionAuthEnabled: boolean;
 };

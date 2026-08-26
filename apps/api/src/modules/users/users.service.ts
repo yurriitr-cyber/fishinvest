@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InitData } from '@telegram-apps/init-data-node';
@@ -65,6 +66,10 @@ export class UsersService {
     });
 
     if (existing) {
+      if (existing.status === 'BANNED') {
+        throw new ForbiddenException('Account is banned');
+      }
+
       await this.prisma.db.user.update({
         where: { id: existing.id },
         data: {

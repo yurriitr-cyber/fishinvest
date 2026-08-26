@@ -236,4 +236,46 @@ export class AdminController {
   ): Promise<any> {
     return this.admin.setBan(admin, id, false, dto.reason);
   }
+
+  @Get('audit')
+  audit(
+    @Query('limit') limit?: string,
+    @Query('actionType') actionType?: string,
+  ): Promise<any> {
+    return this.admin.listAudit(
+      limit ? Number(limit) : 50,
+      actionType || undefined,
+    );
+  }
+
+  @Get('events')
+  events(@Query('limit') limit?: string): Promise<any> {
+    return this.admin.listEvents(limit ? Number(limit) : 30);
+  }
+
+  @Post('events/:id/activate')
+  activateEvent(
+    @AdminUser() admin: User,
+    @Param('id') id: string,
+  ): Promise<any> {
+    return this.admin.setEventActive(admin, id, true);
+  }
+
+  @Post('events/:id/deactivate')
+  deactivateEvent(
+    @AdminUser() admin: User,
+    @Param('id') id: string,
+  ): Promise<any> {
+    return this.admin.setEventActive(admin, id, false);
+  }
+
+  @Get('casino')
+  casino(): Promise<any> {
+    return this.admin.casinoStats();
+  }
+
+  @Get('security')
+  security(): Promise<any> {
+    return this.admin.securityOverview();
+  }
 }
