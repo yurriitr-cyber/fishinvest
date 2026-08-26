@@ -23,10 +23,11 @@ export function PortfolioPage({
     <div className="screen">
       <div className="topbar">
         <div>
-          <h1>My Portfolio</h1>
-          <p>Virtual P/L on simulated fish.</p>
+          <div className="eyebrow">Overview</div>
+          <h1>Assets</h1>
+          <p>Positions · unrealized P/L</p>
         </div>
-        <div className="stat-stack">
+        <div className="balance-pill">
           <div className="label">Cash</div>
           <div className="value">⭐ {formatStars(me.balance)}</div>
         </div>
@@ -36,20 +37,23 @@ export function PortfolioPage({
 
       {data && (
         <>
-          <div className="summary">
-            <div className="summary-item">
-              <div className="label">Value</div>
+          <div className="ticker">
+            <div className="ticker-card">
+              <div className="label">Equity</div>
               <div className="value">⭐ {formatStars(data.currentValue)}</div>
             </div>
-            <div className="summary-item">
+            <div className="ticker-card">
               <div className="label">Invested</div>
               <div className="value">⭐ {formatStars(data.totalInvested)}</div>
             </div>
+          </div>
+
+          <div className="summary">
             <div className="summary-item">
               <div className="label">Unrealized</div>
               <div className={`value ${pnlClass(data.unrealizedPnl)}`}>
-                {formatStars(data.unrealizedPnl)} (
-                {formatPct(data.unrealizedPnlPercent)})
+                {formatStars(data.unrealizedPnl)} ·{' '}
+                {formatPct(data.unrealizedPnlPercent)}
               </div>
             </div>
             <div className="summary-item">
@@ -61,10 +65,14 @@ export function PortfolioPage({
           </div>
 
           <div className="section-title">Positions</div>
+          <div className="market-head">
+            <span>Asset</span>
+            <span>Value</span>
+            <span>P/L</span>
+          </div>
+
           {data.positions.length === 0 && (
-            <div className="state-box">
-              Empty tank. Buy something weird on the market.
-            </div>
+            <div className="state-box">No open positions. Buy on Markets.</div>
           )}
           <div className="list">
             {data.positions.map((p) => (
@@ -76,13 +84,13 @@ export function PortfolioPage({
               >
                 <div className="glyph">{fishGlyph(p.symbol)}</div>
                 <div className="row-main">
-                  <div className="name">{p.name}</div>
+                  <div className="name">{p.symbol}</div>
                   <div className="meta">
-                    {p.quantity} · avg ⭐ {formatStars(p.avgBuyPrice)}
+                    qty {p.quantity} · avg {formatStars(p.avgBuyPrice, 2)}
                   </div>
                 </div>
                 <div className="row-side">
-                  <div className="price">⭐ {formatStars(p.currentValue)}</div>
+                  <div className="price">{formatStars(p.currentValue, 2)}</div>
                   <div className={`chg ${pnlClass(p.unrealizedPnl)}`}>
                     {formatPct(p.unrealizedPnlPercent)}
                   </div>

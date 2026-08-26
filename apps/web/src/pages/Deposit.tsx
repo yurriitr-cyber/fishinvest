@@ -8,7 +8,9 @@ import {
 } from '../lib/api';
 import { formatStars } from '../lib/format';
 
-async function openTelegramInvoice(invoiceLink: string): Promise<'paid' | 'cancelled' | 'failed' | 'unavailable'> {
+async function openTelegramInvoice(
+  invoiceLink: string,
+): Promise<'paid' | 'cancelled' | 'failed' | 'unavailable'> {
   try {
     const sdk = await import('@telegram-apps/sdk');
     if (sdk.invoice.open.isAvailable()) {
@@ -21,7 +23,6 @@ async function openTelegramInvoice(invoiceLink: string): Promise<'paid' | 'cance
     /* fall through */
   }
 
-  // Browser / unsupported: open link if possible
   if (invoiceLink.startsWith('http')) {
     window.open(invoiceLink, '_blank');
     return 'unavailable';
@@ -87,7 +88,6 @@ export function Deposit({
       }
       const status = await openTelegramInvoice(deposit.invoiceLink);
       if (status === 'paid') {
-        // Bot confirms asynchronously; poll a few times
         for (let i = 0; i < 8; i++) {
           await new Promise((r) => setTimeout(r, 700));
           const fresh = await api.getDeposit(deposit.id);
@@ -100,9 +100,7 @@ export function Deposit({
       } else if (status === 'cancelled') {
         setError('Payment cancelled.');
       } else if (status === 'unavailable') {
-        setError(
-          'Open this Mini App inside Telegram to pay with Stars. Invoice created.',
-        );
+        setError('Open this Mini App inside Telegram to pay with Stars.');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Deposit failed');
@@ -115,11 +113,12 @@ export function Deposit({
     <div className="screen">
       <div className="topbar">
         <div>
+          <div className="eyebrow">Fiat gate</div>
           <h1>Deposit</h1>
-          <p>Real assets → game credits. Separate ledgers.</p>
+          <p>Telegram Stars → game ⭐ · 1:1</p>
         </div>
-        <div className="stat-stack">
-          <div className="label">Game balance</div>
+        <div className="balance-pill">
+          <div className="label">Balance</div>
           <div className="value">⭐ {formatStars(me.balance)}</div>
         </div>
       </div>
@@ -140,7 +139,7 @@ export function Deposit({
               </div>
             </div>
             <span className={`badge ${m.enabled ? '' : 'off'}`}>
-              {m.enabled ? 'LIVE' : 'OFF'}
+              {m.enabled ? 'LIVE' : 'SOON'}
             </span>
           </div>
         ))}
@@ -148,7 +147,9 @@ export function Deposit({
 
       {starsMethod?.enabled && (
         <div className="trade-panel">
-          <div className="section-title">Buy with Telegram Stars</div>
+          <div className="section-title" style={{ marginTop: 0 }}>
+            Amount
+          </div>
           <div className="qty-presets">
             {packs.map((n) => (
               <button
@@ -166,24 +167,8 @@ export function Deposit({
             <div className="summary">
               <div className="summary-item">
                 <div className="label">Rate</div>
-                <div className="value">1★ → 1 game ⭐</div>
+                <div className="value">1★ = 1 game ⭐</div>
               </div>
-              {Number(quote.feePercent) > 0 && (
-                <>
-                  <div className="summary-item">
-                    <div className="label">Gross</div>
-                    <div className="value">
-                      ⭐ {formatStars(quote.grossGameCredits)}
-                    </div>
-                  </div>
-                  <div className="summary-item">
-                    <div className="label">Fee ({quote.feePercent}%)</div>
-                    <div className="value">
-                      ⭐ {formatStars(quote.feeAmount)}
-                    </div>
-                  </div>
-                </>
-              )}
               <div className="summary-item">
                 <div className="label">You receive</div>
                 <div className="value">
@@ -204,17 +189,12 @@ export function Deposit({
 
           {lastDeposit && (
             <p className="meme">
-              Deposit {lastDeposit.id.slice(0, 8)}… · {lastDeposit.status}
+              Order {lastDeposit.id.slice(0, 8)}… · {lastDeposit.status}
               {lastDeposit.status === 'CONFIRMED'
-                ? ` · +${formatStars(lastDeposit.gameCreditAmount || '0')} credits`
+                ? ` · +${formatStars(lastDeposit.gameCreditAmount || '0')}`
                 : ''}
             </p>
           )}
-
-          <p className="meme">
-            Conversion is configurable (not 1 Star = 1 game credit). Paying
-            with Stars requires the Mini App inside Telegram + bot token.
-          </p>
         </div>
       )}
     </div>

@@ -17,35 +17,44 @@ export function LeaderboardPage() {
     <div className="screen">
       <div className="topbar">
         <div>
-          <h1>Fish Whales</h1>
-          <p>Ranked by virtual portfolio value.</p>
+          <div className="eyebrow">Leaderboard</div>
+          <h1>Whales</h1>
+          <p>Ranked by portfolio equity</p>
         </div>
       </div>
 
       {error && <div className="error-box">{error}</div>}
-      {!data && !error && <div className="state-box">Counting whales…</div>}
+      {!data && !error && (
+        <div className="state-box">
+          Loading rankings…
+          <div className="loading-bar" />
+        </div>
+      )}
 
       {data && (
         <>
+          <div className="market-head">
+            <span>Trader</span>
+            <span>Equity</span>
+            <span>P/L</span>
+          </div>
           <div className="list">
             {data.leaders.map((row) => (
               <div key={row.userId} className="row" style={{ cursor: 'default' }}>
-                <div className="glyph">{row.rank}</div>
+                <div className="glyph rank">{row.rank}</div>
                 <div className="row-main">
                   <div className="name">
                     {row.displayName}
                     {row.isYou ? ' · you' : ''}
                   </div>
-                  <div className="meta">
-                    P/L {formatPct(row.profitPercent)}
-                  </div>
+                  <div className="meta">P/L {formatPct(row.profitPercent)}</div>
                 </div>
                 <div className="row-side">
                   <div className="price">
-                    ⭐ {formatStars(row.portfolioValue)}
+                    {formatStars(row.portfolioValue, 0)}
                   </div>
                   <div className={`chg ${pnlClass(row.totalProfit)}`}>
-                    {formatStars(row.totalProfit)}
+                    {formatStars(row.totalProfit, 0)}
                   </div>
                 </div>
               </div>
@@ -54,9 +63,9 @@ export function LeaderboardPage() {
 
           {data.you && !data.leaders.some((l) => l.isYou) && (
             <>
-              <div className="section-title">You</div>
+              <div className="section-title">Your rank</div>
               <div className="row" style={{ cursor: 'default' }}>
-                <div className="glyph">{data.you.rank}</div>
+                <div className="glyph rank">{data.you.rank}</div>
                 <div className="row-main">
                   <div className="name">{data.you.displayName}</div>
                   <div className="meta">
@@ -65,7 +74,7 @@ export function LeaderboardPage() {
                 </div>
                 <div className="row-side">
                   <div className="price">
-                    ⭐ {formatStars(data.you.portfolioValue)}
+                    {formatStars(data.you.portfolioValue, 0)}
                   </div>
                 </div>
               </div>
@@ -73,9 +82,7 @@ export function LeaderboardPage() {
           )}
 
           {data.leaders.length === 0 && (
-            <div className="state-box">
-              No portfolios yet. Buy fish. Become legend.
-            </div>
+            <div className="state-box">No portfolios yet. Trade to climb.</div>
           )}
         </>
       )}

@@ -22,7 +22,7 @@ export function Referrals({
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(me.referralLink);
-      notify('Invite link copied. Send it to a friend.');
+      notify('Invite link copied');
     } catch {
       notify(me.referralLink);
     }
@@ -32,17 +32,18 @@ export function Referrals({
     <div className="screen">
       <div className="topbar">
         <div>
+          <div className="eyebrow">Growth</div>
           <h1>Invite</h1>
-          <p>You get +300 ⭐. Friend gets +50 ⭐.</p>
+          <p>You +300 ⭐ · Friend +50 ⭐</p>
         </div>
       </div>
 
-      <div className="summary">
-        <div className="summary-item">
+      <div className="ticker">
+        <div className="ticker-card">
           <div className="label">Friends</div>
           <div className="value">{stats?.count ?? '—'}</div>
         </div>
-        <div className="summary-item">
+        <div className="ticker-card">
           <div className="label">Earned</div>
           <div className="value">
             ⭐ {stats ? formatStars(stats.totalBonusEarned) : '—'}
@@ -56,9 +57,7 @@ export function Referrals({
 
       {error && <div className="error-box">{error}</div>}
 
-      <div className="section-title" style={{ marginTop: 18 }}>
-        Recent joins
-      </div>
+      <div className="section-title">Recent joins</div>
       <div className="list">
         {(stats?.referrals || []).map((r) => (
           <div key={r.id} className="row" style={{ cursor: 'default' }}>
@@ -72,14 +71,14 @@ export function Referrals({
               </div>
             </div>
             <div className="row-side">
-              <div className="price">+⭐ {formatStars(r.bonus)}</div>
+              <div className="price">+{formatStars(r.bonus)}</div>
             </div>
           </div>
         ))}
       </div>
 
       {stats && stats.referrals.length === 0 && (
-        <div className="state-box">No invites yet. Be the first aquarium prophet.</div>
+        <div className="state-box">No invites yet. Share your link.</div>
       )}
     </div>
   );

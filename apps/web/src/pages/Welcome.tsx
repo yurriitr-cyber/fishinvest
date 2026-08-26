@@ -10,17 +10,20 @@ export function Welcome({ me, onEnter }: { me: Me; onEnter: () => void }) {
     <section className="hero">
       <div className="hero-visual" aria-hidden />
       <div className="hero-copy">
+        <div className="eyebrow">
+          <span className="live-dot" /> Simulated exchange
+        </div>
         <h1 className="brand">
           Rare Fish
           <span>Investment</span>
         </h1>
         <p className="lede">
-          A simulated aquarium market. Buy absurd fish. Watch prices thrash
-          like crypto. Become a Fish Whale.
+          Trade meme fish like a pro terminal. Prices thrash. Whales appear.
+          Your game ⭐ are the only real stakes.
         </p>
         <div className="bonus-chip">
-          Starter pack · ⭐ {formatStars(total)}
-          {join > 0 ? ' (incl. invite bonus)' : ''}
+          Starter · ⭐ {formatStars(total)}
+          {join > 0 ? ' · invite bonus' : ''}
         </div>
         <div className="cta-row">
           <button className="btn btn-primary" type="button" onClick={onEnter}>

@@ -42,8 +42,8 @@ export function Trade({
       await onTraded();
       notify(
         side === 'buy'
-          ? `Bought ${quantity} ${fish.symbol}. You're in the tank now.`
-          : `Sold ${quantity} ${fish.symbol}. Cash is a feeling.`,
+          ? `Bought ${quantity} ${fish.symbol}`
+          : `Sold ${quantity} ${fish.symbol}`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Trade failed');
@@ -53,59 +53,67 @@ export function Trade({
   }
 
   if (!fish && !error) {
-    return <div className="state-box">Loading fish…</div>;
+    return (
+      <div className="state-box">
+        Loading pair…
+        <div className="loading-bar" />
+      </div>
+    );
   }
 
   return (
     <div className="screen">
-      <button className="chip" type="button" onClick={onBack}>
-        ← Market
+      <button className="chip ghost-back" type="button" onClick={onBack}>
+        ← Markets
       </button>
 
       {error && <div className="error-box">{error}</div>}
 
       {fish && (
         <>
-          <div className="topbar" style={{ marginTop: 14 }}>
+          <div className="topbar">
             <div>
+              <div className="eyebrow">{fish.rarity}</div>
               <h1>
-                {fishGlyph(fish.symbol)} {fish.name}
+                {fishGlyph(fish.symbol)} {fish.symbol}
               </h1>
-              <p>
-                {fish.symbol} · {fish.rarity}
-              </p>
+              <p>{fish.name}</p>
             </div>
-            <div className="stat-stack">
-              <div className="label">Price</div>
-              <div className="value">⭐ {formatStars(fish.currentPrice)}</div>
-              <div className={`chg ${pnlClass(fish.dailyChangePercent)}`}>
-                {formatPct(fish.dailyChangePercent)}
-              </div>
+            <div className="balance-pill">
+              <div className="label">Available</div>
+              <div className="value">⭐ {formatStars(balance)}</div>
             </div>
           </div>
 
-          <div className="summary">
-            <div className="summary-item">
+          <div className="price-hero mono">
+            {formatStars(fish.currentPrice, 2)}
+            <span className={`chg ${pnlClass(fish.dailyChangePercent)}`}>
+              {formatPct(fish.dailyChangePercent)}
+            </span>
+          </div>
+
+          <div className="ticker">
+            <div className="ticker-card">
               <div className="label">ATH</div>
-              <div className="value">⭐ {formatStars(fish.allTimeHigh)}</div>
+              <div className="value">{formatStars(fish.allTimeHigh, 2)}</div>
             </div>
-            <div className="summary-item">
+            <div className="ticker-card">
               <div className="label">ATL</div>
-              <div className="value">⭐ {formatStars(fish.allTimeLow)}</div>
+              <div className="value">{formatStars(fish.allTimeLow, 2)}</div>
             </div>
           </div>
 
           <div className="trade-panel">
-            <div className="qty-presets">
+            <div className="side-toggle">
               <button
-                className={`chip ${side === 'buy' ? 'active' : ''}`}
+                className={`buy ${side === 'buy' ? 'active' : ''}`}
                 type="button"
                 onClick={() => setSide('buy')}
               >
                 Buy
               </button>
               <button
-                className={`chip ${side === 'sell' ? 'active' : ''}`}
+                className={`sell ${side === 'sell' ? 'active' : ''}`}
                 type="button"
                 onClick={() => setSide('sell')}
               >
@@ -113,7 +121,9 @@ export function Trade({
               </button>
             </div>
 
-            <div className="section-title">Quantity</div>
+            <div className="section-title" style={{ marginTop: 0 }}>
+              Quantity
+            </div>
             <div className="qty-row">
               <input
                 inputMode="decimal"
@@ -122,7 +132,7 @@ export function Trade({
               />
             </div>
             <div className="qty-presets">
-              {['1', '5', '10'].map((n) => (
+              {['1', '5', '10', '25'].map((n) => (
                 <button
                   key={n}
                   className={`chip ${qty === n ? 'active' : ''}`}
@@ -137,16 +147,18 @@ export function Trade({
             <div className="summary">
               <div className="summary-item">
                 <div className="label">Total</div>
-                <div className="value">⭐ {formatStars(total)}</div>
+                <div className="value">⭐ {formatStars(total, 2)}</div>
               </div>
               <div className="summary-item">
-                <div className="label">Your balance</div>
-                <div className="value">⭐ {formatStars(balance)}</div>
+                <div className="label">Est. fill</div>
+                <div className="value">
+                  {formatStars(fish.currentPrice, 2)} × {quantity || 0}
+                </div>
               </div>
             </div>
 
             <button
-              className="btn btn-solid"
+              className={`btn ${side === 'buy' ? 'btn-buy' : 'btn-sell'}`}
               type="button"
               disabled={busy || fish.isFrozen || quantity <= 0}
               onClick={submit}

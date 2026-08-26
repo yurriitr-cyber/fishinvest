@@ -56,24 +56,29 @@ export default function App() {
 
   async function onTraded() {
     await refreshMe();
-    notify('Trade filled. The aquarium noticed.');
+    notify('Order filled');
   }
 
   let body: ReactNode;
 
   if (loading) {
-    body = <div className="state-box">Opening the tank…</div>;
+    body = (
+      <div className="state-box">
+        Connecting to exchange…
+        <div className="loading-bar" />
+      </div>
+    );
   } else if (error || !me) {
     body = (
       <div className="screen">
+        <div className="eyebrow">Offline</div>
         <h1 className="brand">
           Rare Fish
           <span>Investment</span>
         </h1>
         <div className="error-box">{error || 'Unavailable'}</div>
         <p className="lede">
-          Start the API and Postgres, then reload. Browser mode uses
-          `x-dev-telegram-id`.
+          Check that API is online, then reopen the Mini App.
         </p>
       </div>
     );
