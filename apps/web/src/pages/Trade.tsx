@@ -9,6 +9,7 @@ import {
   formatSupply,
   pnlClass,
 } from '../lib/format';
+import { fishLore } from '../lib/fishLore';
 
 export function Trade({
   fishId,
@@ -121,11 +122,10 @@ export function Trade({
             </div>
           </div>
 
-          {fish.imageUrl ? (
-            <div className="fish-hero">
-              <img src={fish.imageUrl} alt={fish.name} />
-            </div>
-          ) : null}
+          <div className="fish-lore">
+            <div className="eyebrow">О рыбе</div>
+            <p>{fishLore(fish.symbol)}</p>
+          </div>
 
           <div className="price-hero mono">
             {formatStars(fish.currentPrice, 2)}
