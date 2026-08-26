@@ -6,7 +6,7 @@
     "prebuild": "pnpm --filter @rare-fish/shared build && pnpm --filter @rare-fish/db generate && pnpm --filter @rare-fish/db build",
     "build": "nest build",
     "dev": "nest start --watch",
-    "start": "node dist/main.js",
+    "start": "pnpm --filter @rare-fish/db exec prisma migrate deploy && pnpm --filter @rare-fish/db seed && node dist/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {
