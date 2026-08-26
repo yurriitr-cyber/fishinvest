@@ -167,10 +167,15 @@ export default function App() {
           <div className="panel">
             <h2>Sign in</h2>
             <p className="muted">
-              Open this page on desktop. Enter your Telegram user id (from{' '}
-              <code>@userinfobot</code>) and the <code>ADMIN_API_SECRET</code>{' '}
-              from Railway API settings. Your id must be listed in{' '}
-              <code>ADMIN_TELEGRAM_IDS</code>.
+              1. Telegram ID: <code>819826046</code> (or yours from{' '}
+              <code>@userinfobot</code>)
+              <br />
+              2. Secret: value of <code>INTERNAL_API_SECRET</code> or{' '}
+              <code>ADMIN_API_SECRET</code> from Railway →{' '}
+              <strong>@rare-fish/api</strong> → Variables (click the eye to
+              reveal).
+              <br />
+              3. Click <strong>Sign in</strong> in the left sidebar.
             </p>
           </div>
         )}

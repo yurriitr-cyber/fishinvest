@@ -23,7 +23,12 @@ export class TmaAuthGuard implements CanActivate {
     }
 
     const botToken = this.config.get<string>('TELEGRAM_BOT_TOKEN');
-    const adminSecret = this.config.get<string>('ADMIN_API_SECRET');
+    // Prefer dedicated admin secret; fall back to INTERNAL_API_SECRET so
+    // desktop admin works without a second Railway variable.
+    const adminSecret =
+      this.config.get<string>('ADMIN_API_SECRET') ||
+      this.config.get<string>('INTERNAL_API_SECRET') ||
+      '';
     const providedSecret =
       (request.headers['x-admin-secret'] as string | undefined) || '';
 
