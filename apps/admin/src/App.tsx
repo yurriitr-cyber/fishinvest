@@ -84,13 +84,16 @@ export default function App() {
   const [fish, setFish] = useState<Fish[]>([]);
   const [targets, setTargets] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [usersTotal, setUsersTotal] = useState(0);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [balanceInput, setBalanceInput] = useState('');
   const [balanceReason, setBalanceReason] = useState('пополнение админом');
   const [adjustDelta, setAdjustDelta] = useState('50');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
-  const [oracle, setOracle] = useState<Record<string, unknown> | null>(null);
+  const [oracle, setOracle] = useState<Awaited<
+    ReturnType<typeof adminApi.oracles>
+  > | null>(null);
   const [audit, setAudit] = useState<AuditItem[]>([]);
   const [events, setEvents] = useState<MarketEvent[]>([]);
   const [casino, setCasino] = useState<CasinoStats | null>(null);
@@ -159,6 +162,13 @@ export default function App() {
     setOkMsg('Вы вышли из админки');
   }
 
+  async function loadUsers(query = q) {
+    const res = await adminApi.users(query || undefined);
+    setUsers(res.users);
+    setUsersTotal(res.total);
+    return res;
+  }
+
   useEffect(() => {
     if (getDevTelegramId() && getAdminSession()) boot();
   }, []);
@@ -180,7 +190,7 @@ export default function App() {
             setTargets(next);
           }
         }
-        if (tab === 'users') setUsers(await adminApi.users(q || undefined));
+        if (tab === 'users') await loadUsers();
         if (tab === 'payments') {
           setPayments(await adminApi.paymentSettings());
           setOracle(await adminApi.oracles());
@@ -195,6 +205,14 @@ export default function App() {
       }
     })();
   }, [tab, meOk]);
+
+  useEffect(() => {
+    if (!meOk || tab !== 'users') return;
+    const id = setInterval(() => {
+      void loadUsers().catch(() => undefined);
+    }, 15000);
+    return () => clearInterval(id);
+  }, [meOk, tab]);
 
   useEffect(() => {
     if (!meOk || tab !== 'targets') return;
@@ -582,14 +600,18 @@ export default function App() {
             <>
               <div className="toolbar">
                 <label className="field" style={{ flex: 2 }}>
-                  <span>Поиск</span>
+                  <span>Поиск (необязательно)</span>
                   <input
-                    placeholder="username или telegram id"
+                    placeholder="username или telegram id — пусто = все"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        void adminApi.users(q || undefined).then(setUsers);
+                        void loadUsers(e.currentTarget.value).catch((err) =>
+                          setError(
+                            err instanceof Error ? err.message : 'Ошибка поиска',
+                          ),
+                        );
                       }
                     }}
                   />
@@ -597,12 +619,52 @@ export default function App() {
                 <button
                   type="button"
                   className="btn"
-                  onClick={async () => setUsers(await adminApi.users(q || undefined))}
+                  onClick={async () => {
+                    try {
+                      await loadUsers();
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : 'Ошибка поиска');
+                    }
+                  }}
                 >
-                  Найти
+                  Обновить
                 </button>
+                {q ? (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={async () => {
+                      setQ('');
+                      try {
+                        await loadUsers('');
+                      } catch (e) {
+                        setError(
+                          e instanceof Error ? e.message : 'Ошибка загрузки',
+                        );
+                      }
+                    }}
+                  >
+                    Показать всех
+                  </button>
+                ) : null}
               </div>
               <div className="panel">
+                <div className="panel-head">
+                  <div>
+                    <h2>Все пользователи</h2>
+                    <p className="muted">
+                      Показано {users.length}
+                      {usersTotal > users.length ? ` из ${usersTotal}` : ''} ·
+                      новые появляются автоматически
+                    </p>
+                  </div>
+                </div>
+                <div className="row header">
+                  <div>Имя</div>
+                  <div>Telegram</div>
+                  <div>Баланс</div>
+                  <div>Действия</div>
+                </div>
                 {users.map((u) => (
                   <div key={u.id} className="row">
                     <div>
@@ -616,6 +678,11 @@ export default function App() {
                         <span className="badge" style={{ marginLeft: 4 }}>
                           admin
                         </span>
+                      ) : null}
+                      {u.createdAt ? (
+                        <div className="dim" style={{ fontSize: 11 }}>
+                          с {when(u.createdAt)}
+                        </div>
                       ) : null}
                     </div>
                     <div className="mono">{String(u.telegramId)}</div>
@@ -648,7 +715,7 @@ export default function App() {
                               'бан';
                             await adminApi.ban(u.id, reason);
                           }
-                          setUsers(await adminApi.users(q || undefined));
+                          await loadUsers();
                           if (selectedUser?.id === u.id) {
                             setSelectedUser(await adminApi.user(u.id));
                           }
@@ -659,6 +726,12 @@ export default function App() {
                     </div>
                   </div>
                 ))}
+                {!users.length && (
+                  <p className="muted" style={{ marginTop: 12 }}>
+                    Пользователей пока нет — как только кто-то откроет Mini App,
+                    он появится в этом списке.
+                  </p>
+                )}
               </div>
 
               {selectedUser && (
@@ -716,7 +789,7 @@ export default function App() {
                             reason,
                           );
                           setSelectedUser(updated);
-                          setUsers(await adminApi.users(q || undefined));
+                          await loadUsers();
                           setOkMsg(
                             `Баланс → ${n(updated.gameBalance?.available)} CR`,
                           );
@@ -776,7 +849,7 @@ export default function App() {
                           setBalanceInput(
                             String(Number(updated.gameBalance?.available ?? 0)),
                           );
-                          setUsers(await adminApi.users(q || undefined));
+                          await loadUsers();
                           setOkMsg(
                             `Изменение ${amount > 0 ? '+' : ''}${amount} → ${n(updated.gameBalance?.available)} CR`,
                           );
@@ -832,16 +905,77 @@ export default function App() {
           {tab === 'payments' && (
             <>
               <div className="panel">
-                <h2>Оракул TON</h2>
-                <pre
-                  className="mono"
-                  style={{ whiteSpace: 'pre-wrap', fontSize: 12, margin: 0 }}
-                >
-                  {JSON.stringify(oracle, null, 2)}
-                </pre>
+                <h2>Курс TON</h2>
+                <p className="muted" style={{ marginBottom: 14 }}>
+                  Живой оракул для депозитов в TON. Цена обновляется с
+                  CoinGecko / Binance.
+                </p>
+                {oracle?.ton?.ok ? (
+                  <div className="grid-stats">
+                    <div className="stat">
+                      <div className="label">1 TON</div>
+                      <div className="value">${n(oracle.ton.usdPrice, 4)}</div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Источник</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>
+                        {oracle.ton.source || '—'}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Обновлено</div>
+                      <div className="value" style={{ fontSize: '0.95rem' }}>
+                        {oracle.ton.fetchedAt
+                          ? when(oracle.ton.fetchedAt)
+                          : '—'}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Действует до</div>
+                      <div className="value" style={{ fontSize: '0.95rem' }}>
+                        {oracle.ton.expiresAt
+                          ? when(oracle.ton.expiresAt)
+                          : '—'}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="toast-error">
+                    Оракул недоступен
+                    {oracle?.ton?.error ? `: ${oracle.ton.error}` : ''}
+                  </div>
+                )}
+                {(oracle?.recent?.length ?? 0) > 0 && (
+                  <>
+                    <h2 style={{ fontSize: '1rem', marginTop: 8 }}>
+                      Последние снимки
+                    </h2>
+                    <div className="row header" style={{ gridTemplateColumns: '0.6fr 1fr 1fr 1.4fr' }}>
+                      <div>Актив</div>
+                      <div>Цена USD</div>
+                      <div>Источник</div>
+                      <div>Когда</div>
+                    </div>
+                    {oracle!.recent.map((s) => (
+                      <div
+                        key={s.id}
+                        className="row"
+                        style={{ gridTemplateColumns: '0.6fr 1fr 1fr 1.4fr' }}
+                      >
+                        <div>{s.asset}</div>
+                        <div className="mono">${n(s.usdPrice, 4)}</div>
+                        <div className="muted">{s.source}</div>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {when(s.fetchedAt)}
+                          {!s.isValid ? ' · невалид' : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
               <div className="panel">
-                <h2>Провайдеры</h2>
+                <h2>Провайдеры оплаты</h2>
                 {payments.map((p) => (
                   <div key={p.code} className="row">
                     <div>{p.code}</div>

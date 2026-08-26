@@ -193,7 +193,7 @@ export class AdminController {
 
   @Get('users')
   users(@Query('q') q?: string, @Query('limit') limit?: string): Promise<any> {
-    return this.admin.searchUsers(q, limit ? Number(limit) : 50);
+    return this.admin.searchUsers(q, limit ? Number(limit) : 200);
   }
 
   @Get('users/:id')

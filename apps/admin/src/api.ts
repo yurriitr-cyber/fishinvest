@@ -127,7 +127,6 @@ export const adminApi = {
     request(`/admin/fish/${id}/unfreeze`, { method: 'POST' }),
   deposits: (limit = 50) =>
     request<Deposit[]>(`/admin/deposits?limit=${limit}`),
-  oracles: () => request<Record<string, unknown>>('/admin/oracles'),
   paymentSettings: () => request<Payment[]>('/admin/payment-settings'),
   patchPayment: (code: string, data: Record<string, unknown>) =>
     request(`/admin/payment-settings/${code}`, {
@@ -135,7 +134,9 @@ export const adminApi = {
       body: JSON.stringify(data),
     }),
   users: (q?: string) =>
-    request<AdminUser[]>(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+    request<{ total: number; users: AdminUser[] }>(
+      `/admin/users?limit=200${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+    ),
   user: (id: string) => request<AdminUserDetail>(`/admin/users/${id}`),
   adjustBalance: (id: string, amount: number, reason: string) =>
     request<AdminUserDetail>(`/admin/users/${id}/adjust-balance`, {
@@ -164,6 +165,26 @@ export const adminApi = {
     request(`/admin/events/${id}/deactivate`, { method: 'POST' }),
   casino: () => request<CasinoStats>('/admin/casino'),
   security: () => request<SecurityOverview>('/admin/security'),
+  oracles: () =>
+    request<{
+      ton: {
+        ok: boolean;
+        usdPrice?: string;
+        source?: string;
+        fetchedAt?: string;
+        expiresAt?: string;
+        error?: string;
+      };
+      recent: Array<{
+        id: string;
+        asset: string;
+        usdPrice: string;
+        source: string;
+        isValid: boolean;
+        fetchedAt: string;
+        expiresAt: string;
+      }>;
+    }>('/admin/oracles'),
 };
 
 export type Fish = {
@@ -210,7 +231,9 @@ export type AdminUser = {
   firstName: string | null;
   status: string;
   isAdmin: boolean;
-  gameBalance?: { available: string | number };
+  createdAt?: string;
+  lastSeenAt?: string | null;
+  gameBalance?: { available: string | number } | null;
 };
 
 export type AdminUserDetail = AdminUser & {

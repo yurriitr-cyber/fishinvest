@@ -415,27 +415,70 @@ export class AdminService {
   }
 
   async listDeposits(limit = 50) {
-    return this.prisma.db.deposit.findMany({
+    const rows = await this.prisma.db.deposit.findMany({
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 200),
       include: {
         user: { select: { id: true, username: true, telegramId: true } },
       },
     });
+    return rows.map((d) => ({
+      id: d.id,
+      provider: d.provider,
+      status: d.status,
+      assetAmount: d.assetAmount.toFixed(4),
+      gameCreditAmount: d.gameCreditAmount?.toFixed(4) ?? null,
+      createdAt: d.createdAt.toISOString(),
+      user: d.user
+        ? {
+            id: d.user.id,
+            username: d.user.username,
+            telegramId: d.user.telegramId.toString(),
+          }
+        : null,
+    }));
   }
 
   async oracleStatus() {
-    let ton = null;
+    let ton: {
+      ok: boolean;
+      usdPrice?: string;
+      source?: string;
+      fetchedAt?: string;
+      expiresAt?: string;
+      error?: string;
+    };
     try {
-      ton = await this.oracle.getTonUsd();
+      const quote = await this.oracle.getTonUsd();
+      ton = {
+        ok: true,
+        usdPrice: quote.usdPrice,
+        source: quote.source,
+        fetchedAt: quote.fetchedAt,
+        expiresAt: quote.expiresAt,
+      };
     } catch (e) {
-      ton = { error: e instanceof Error ? e.message : 'unavailable' };
+      ton = {
+        ok: false,
+        error: e instanceof Error ? e.message : 'unavailable',
+      };
     }
     const latest = await this.prisma.db.priceOracleSnapshot.findMany({
       orderBy: { fetchedAt: 'desc' },
       take: 10,
     });
-    return { ton, recent: latest };
+    return {
+      ton,
+      recent: latest.map((s) => ({
+        id: s.id,
+        asset: s.asset,
+        usdPrice: s.usdPrice.toFixed(8),
+        source: s.source,
+        isValid: s.isValid,
+        fetchedAt: s.fetchedAt.toISOString(),
+        expiresAt: s.expiresAt.toISOString(),
+      })),
+    };
   }
 
   async listPaymentSettings() {
@@ -469,22 +512,31 @@ export class AdminService {
     return after;
   }
 
-  async searchUsers(q?: string, limit = 50) {
-    const where = q
+  async searchUsers(q?: string, limit = 200) {
+    const query = q?.trim();
+    const where = query
       ? {
           OR: [
-            { username: { contains: q, mode: 'insensitive' as const } },
-            { firstName: { contains: q, mode: 'insensitive' as const } },
-            ...( /^\d+$/.test(q) ? [{ telegramId: BigInt(q) }] : []),
+            { username: { contains: query, mode: 'insensitive' as const } },
+            { firstName: { contains: query, mode: 'insensitive' as const } },
+            { lastName: { contains: query, mode: 'insensitive' as const } },
+            ...( /^\d+$/.test(query) ? [{ telegramId: BigInt(query) }] : []),
           ],
         }
       : {};
-    return this.prisma.db.user.findMany({
-      where,
-      take: Math.min(limit, 100),
-      orderBy: { createdAt: 'desc' },
-      include: { gameBalance: true },
-    });
+    const [users, total] = await Promise.all([
+      this.prisma.db.user.findMany({
+        where,
+        take: Math.min(Math.max(limit, 1), 500),
+        orderBy: { createdAt: 'desc' },
+        include: { gameBalance: true },
+      }),
+      this.prisma.db.user.count({ where }),
+    ]);
+    return {
+      total,
+      users: users.map((u) => this.serializeUserSummary(u)),
+    };
   }
 
   async getUser(id: string) {
@@ -499,7 +551,62 @@ export class AdminService {
       },
     });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    return {
+      ...this.serializeUserSummary(user),
+      lastName: user.lastName,
+      createdAt: user.createdAt.toISOString(),
+      lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
+      referralCode: user.referralCode,
+      portfolioPositions: user.portfolioPositions.map((p) => ({
+        quantity: p.quantity.toFixed(4),
+        fish: {
+          symbol: p.fish.symbol,
+          currentPrice: p.fish.currentPrice.toFixed(4),
+        },
+      })),
+      deposits: user.deposits.map((d) => ({
+        id: d.id,
+        provider: d.provider,
+        status: d.status,
+        gameCreditAmount: d.gameCreditAmount?.toFixed(4) ?? null,
+      })),
+      ledgerEntries: user.ledgerEntries.map((e) => ({
+        type: e.type,
+        amount: e.amount.toFixed(4),
+        createdAt: e.createdAt.toISOString(),
+      })),
+      trades: user.trades.map((t) => ({
+        side: t.side,
+        totalAmount: t.totalAmount.toFixed(4),
+        createdAt: t.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  private serializeUserSummary(u: {
+    id: string;
+    telegramId: bigint;
+    username: string | null;
+    firstName: string | null;
+    status: string;
+    isAdmin: boolean;
+    createdAt?: Date;
+    lastSeenAt?: Date | null;
+    gameBalance?: { available: Prisma.Decimal } | null;
+  }) {
+    return {
+      id: u.id,
+      telegramId: u.telegramId.toString(),
+      username: u.username,
+      firstName: u.firstName,
+      status: u.status,
+      isAdmin: u.isAdmin,
+      createdAt: u.createdAt?.toISOString?.() ?? undefined,
+      lastSeenAt: u.lastSeenAt?.toISOString?.() ?? null,
+      gameBalance: u.gameBalance
+        ? { available: u.gameBalance.available.toFixed(4) }
+        : null,
+    };
   }
 
   async adjustBalance(admin: User, userId: string, amount: number, reason: string) {
@@ -607,7 +714,7 @@ export class AdminService {
   }
 
   async listAudit(limit = 50, actionType?: string) {
-    return this.prisma.db.adminAction.findMany({
+    const rows = await this.prisma.db.adminAction.findMany({
       where: actionType ? { actionType } : undefined,
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 200),
@@ -622,6 +729,21 @@ export class AdminService {
         },
       },
     });
+    return rows.map((a) => ({
+      id: a.id,
+      actionType: a.actionType,
+      entityType: a.entityType,
+      entityId: a.entityId,
+      createdAt: a.createdAt.toISOString(),
+      afterState: a.afterState,
+      adminUser: a.adminUser
+        ? {
+            username: a.adminUser.username,
+            firstName: a.adminUser.firstName,
+            telegramId: a.adminUser.telegramId.toString(),
+          }
+        : null,
+    }));
   }
 
   async listEvents(limit = 30) {
