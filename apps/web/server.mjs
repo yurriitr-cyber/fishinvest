@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 /**
- * Production static server for the Mini App.
+ * Production static server for the Mini App + Admin console.
  * Proxies /api/* to API_PROXY_TARGET (Railway private/public API URL).
  */
 import http from 'node:http';
 import https from 'node:https';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { join, extname, normalize } from 'node:path';
+import { join, extname, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { URL } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const distDir = join(__dirname, 'dist');
+const distDir = normalize(join(__dirname, 'dist'));
+const adminIndex = join(distDir, 'admin', 'index.html');
 const port = Number(process.env.PORT || 5180);
 const apiTarget = (process.env.API_PROXY_TARGET || 'http://127.0.0.1:3000').replace(
   /\/$/,
@@ -38,31 +39,57 @@ function sendFile(res, filePath) {
   const ext = extname(filePath).toLowerCase();
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+    'Cache-Control':
+      ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
   });
   createReadStream(filePath).pipe(res);
 }
 
-function serveStatic(req, res) {
-  const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-  let rel = urlPath === '/' ? '/index.html' : urlPath;
+function resolveUnderDist(urlPath) {
+  // Strip query already done; strip leading slashes so join never resets to root
+  let rel = decodeURIComponent(urlPath).replace(/^\/+/, '');
+  if (!rel || rel.endsWith('/')) {
+    rel = `${rel}index.html`;
+  }
   const candidate = normalize(join(distDir, rel));
-  if (!candidate.startsWith(distDir)) {
+  const root = distDir.endsWith(sep) ? distDir : distDir + sep;
+  if (candidate !== distDir && !candidate.startsWith(root)) {
+    return null;
+  }
+  return candidate;
+}
+
+function serveStatic(req, res) {
+  const urlPath = (req.url || '/').split('?')[0];
+
+  if (urlPath === '/admin' || urlPath.startsWith('/admin?')) {
+    res.writeHead(302, { Location: '/admin/' });
+    res.end();
+    return;
+  }
+
+  const candidate = resolveUnderDist(urlPath);
+  if (!candidate) {
     res.writeHead(403).end('Forbidden');
     return;
   }
+
   if (existsSync(candidate) && statSync(candidate).isFile()) {
     sendFile(res, candidate);
     return;
   }
-  // Admin SPA fallback (assets may 404 into /admin/index.html)
-  if (urlPath === '/admin' || urlPath === '/admin/' || urlPath.startsWith('/admin/')) {
-    const adminIndex = join(distDir, 'admin', 'index.html');
+
+  // Admin SPA fallback
+  if (urlPath === '/admin/' || urlPath.startsWith('/admin/')) {
     if (existsSync(adminIndex)) {
       sendFile(res, adminIndex);
       return;
     }
+    res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Admin UI not built into this image. Redeploy web service.');
+    return;
   }
+
   // Mini App SPA fallback
   const index = join(distDir, 'index.html');
   if (existsSync(index)) {
@@ -75,7 +102,6 @@ function serveStatic(req, res) {
 function proxyApi(req, res) {
   let target;
   try {
-    // apiTarget is origin (e.g. http://api.railway.internal:3000); keep /api path from client
     target = new URL(req.url || '/api', `${apiTarget}/`);
   } catch {
     res.writeHead(502).end(`Bad API_PROXY_TARGET: ${apiTarget}`);
@@ -115,16 +141,13 @@ const server = http.createServer((req, res) => {
     proxyApi(req, res);
     return;
   }
-  // Admin SPA lives under /admin/
-  if (url === '/admin' || url.startsWith('/admin?')) {
-    res.writeHead(302, { Location: '/admin/' });
-    res.end();
-    return;
-  }
   serveStatic(req, res);
 });
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`Mini App listening on :${port}`);
   console.log(`API_PROXY_TARGET=${apiTarget}`);
+  console.log(
+    `Admin UI: ${existsSync(adminIndex) ? 'ready at /admin/' : 'MISSING (check Docker build)'}`,
+  );
 });

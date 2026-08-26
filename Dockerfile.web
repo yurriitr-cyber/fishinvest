@@ -21,8 +21,11 @@ FROM deps AS build
 COPY . .
 RUN pnpm --filter @rare-fish/web build \
   && pnpm --filter @rare-fish/admin build \
+  && test -f apps/admin/dist/index.html \
   && mkdir -p apps/web/dist/admin \
-  && cp -R apps/admin/dist/. apps/web/dist/admin/
+  && cp -R apps/admin/dist/. apps/web/dist/admin/ \
+  && test -f apps/web/dist/admin/index.html \
+  && echo "Admin bundled OK" && ls -la apps/web/dist/admin | head
 
 FROM base AS runner
 ENV NODE_ENV=production
