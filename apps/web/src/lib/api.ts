@@ -150,6 +150,8 @@ export type TonQuote = {
   bonusPercent?: string;
   bonusAmount?: string;
   rateNote: string;
+  rateSource?: string;
+  rateFetchedAt?: string;
   depositAddress: string;
   exchangeRate: string;
 };

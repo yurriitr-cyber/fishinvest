@@ -33,6 +33,20 @@ async function openTelegramInvoice(
 
 type TonPhase = 'idle' | 'awaiting' | 'checking' | 'credited' | 'pending' | 'failed';
 
+function parseStars(raw: string): number | null {
+  const n = Math.floor(Number(raw.replace(/[^\d]/g, '')));
+  if (!Number.isFinite(n) || n < 1) return null;
+  return Math.min(n, 50_000);
+}
+
+function parseTon(raw: string): number | null {
+  const cleaned = raw.replace(',', '.').replace(/[^\d.]/g, '');
+  if (!cleaned || cleaned === '.') return null;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n) || n < 0.05) return null;
+  return Math.min(n, 500);
+}
+
 export function Deposit({
   me,
   onCredited,
@@ -42,8 +56,8 @@ export function Deposit({
 }) {
   const [methods, setMethods] = useState<DepositMethod[]>([]);
   const [channel, setChannel] = useState<'stars' | 'ton'>('stars');
-  const [selected, setSelected] = useState<number | null>(100);
-  const [tonSelected, setTonSelected] = useState<number | null>(1);
+  const [starsInput, setStarsInput] = useState('100');
+  const [tonInput, setTonInput] = useState('1');
   const [quote, setQuote] = useState<StarsQuote | null>(null);
   const [tonQuote, setTonQuote] = useState<TonQuote | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,6 +72,9 @@ export function Deposit({
   const packs = starsMethod?.packs || [50, 100, 250, 500, 1000];
   const tonPacks = tonMethod?.tonPacks || [0.5, 1, 2, 5, 10];
 
+  const selected = parseStars(starsInput);
+  const tonSelected = parseTon(tonInput);
+
   useEffect(() => {
     api
       .depositMethods()
@@ -71,16 +88,22 @@ export function Deposit({
       return;
     }
     let cancelled = false;
-    api
-      .quoteStars(selected)
-      .then((q) => {
-        if (!cancelled) setQuote(q);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Quote failed');
-      });
+    const t = setTimeout(() => {
+      api
+        .quoteStars(selected)
+        .then((q) => {
+          if (!cancelled) {
+            setQuote(q);
+            setError(null);
+          }
+        })
+        .catch((e) => {
+          if (!cancelled) setError(e instanceof Error ? e.message : 'Quote failed');
+        });
+    }, 220);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
   }, [selected, starsMethod?.enabled, channel]);
 
@@ -90,16 +113,29 @@ export function Deposit({
       return;
     }
     let cancelled = false;
-    api
-      .quoteTon(tonSelected)
-      .then((q) => {
-        if (!cancelled) setTonQuote(q);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'TON quote failed');
-      });
+
+    async function pull() {
+      if (!tonSelected) return;
+      try {
+        const q = await api.quoteTon(tonSelected);
+        if (!cancelled) {
+          setTonQuote(q);
+          setError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'TON quote failed');
+        }
+      }
+    }
+
+    const debounce = setTimeout(pull, 220);
+    // Keep the displayed TON rate live while this tab is open
+    const interval = setInterval(pull, 15_000);
     return () => {
       cancelled = true;
+      clearTimeout(debounce);
+      clearInterval(interval);
     };
   }, [tonSelected, tonMethod?.enabled, channel]);
 
@@ -107,7 +143,6 @@ export function Deposit({
     setTonPhase('awaiting');
     setStatusMsg('Open your wallet, send the exact amount with the memo…');
 
-    // Checks across ~10s, then a clear yes/no; a few slower retries after
     const delays = [1000, 2000, 2000, 2500, 2500, 4000, 8000];
     let elapsed = 0;
     for (const wait of delays) {
@@ -203,10 +238,8 @@ export function Deposit({
       );
       setLastDeposit(deposit);
       const token = ++watchRef.current;
-      // Start watcher before opening wallet so we catch fast payments
       void watchTonDeposit(deposit.id, token);
       if (deposit.transferLink) {
-        // Prefer opening without killing the SPA when possible
         try {
           window.open(deposit.transferLink, '_blank');
         } catch {
@@ -251,6 +284,9 @@ export function Deposit({
       setStatusMsg(e instanceof Error ? e.message : 'Check failed');
     }
   }
+
+  const tonUsd = tonQuote ? Number(tonQuote.tonUsdPrice) : null;
+  const creditsPerTon = tonQuote ? Number(tonQuote.exchangeRate) : null;
 
   return (
     <div className="screen">
@@ -297,18 +333,28 @@ export function Deposit({
                 key={n}
                 type="button"
                 className={`chip ${selected === n ? 'active' : ''}`}
-                onClick={() => setSelected(n)}
+                onClick={() => setStarsInput(String(n))}
               >
-                {n} Stars
+                {n}
               </button>
             ))}
           </div>
+          <div className="qty-row">
+            <input
+              inputMode="numeric"
+              placeholder="Custom Stars amount"
+              value={starsInput}
+              onChange={(e) => setStarsInput(e.target.value.replace(/[^\d]/g, ''))}
+              aria-label="Stars amount"
+            />
+          </div>
+          <p className="amount-hint">1–50 000 Stars · 1 Star = 1 CR</p>
 
-          {quote && (
+          {quote && selected && (
             <div className="summary">
               <div className="summary-item">
-                <div className="label">Rate</div>
-                <div className="value">1 Star = 1 CR</div>
+                <div className="label">You pay</div>
+                <div className="value">{selected} Stars</div>
               </div>
               <div className="summary-item">
                 <div className="label">You receive</div>
@@ -323,7 +369,11 @@ export function Deposit({
             disabled={busy || !selected}
             onClick={payStars}
           >
-            {busy ? 'Opening invoice…' : `Pay ${selected} Stars`}
+            {busy
+              ? 'Opening invoice…'
+              : selected
+                ? `Pay ${selected} Stars`
+                : 'Enter amount'}
           </button>
         </div>
       )}
@@ -339,18 +389,43 @@ export function Deposit({
                 key={n}
                 type="button"
                 className={`chip ${tonSelected === n ? 'active' : ''}`}
-                onClick={() => setTonSelected(n)}
+                onClick={() => setTonInput(String(n))}
               >
-                {n} TON
+                {n}
               </button>
             ))}
           </div>
+          <div className="qty-row">
+            <input
+              inputMode="decimal"
+              placeholder="Custom TON amount"
+              value={tonInput}
+              onChange={(e) => {
+                const next = e.target.value.replace(',', '.');
+                if (/^\d*\.?\d{0,9}$/.test(next) || next === '') {
+                  setTonInput(next);
+                }
+              }}
+              aria-label="TON amount"
+            />
+          </div>
+          <p className="amount-hint">0.05–500 TON · live market rate</p>
 
-          {tonQuote && (
+          {tonQuote && tonSelected && (
             <div className="summary">
               <div className="summary-item">
                 <div className="label">TON / USD</div>
-                <div className="value">${Number(tonQuote.tonUsdPrice).toFixed(2)}</div>
+                <div className="value">
+                  ${tonUsd != null && Number.isFinite(tonUsd) ? tonUsd.toFixed(4) : '—'}
+                </div>
+              </div>
+              <div className="summary-item">
+                <div className="label">1 TON ≈</div>
+                <div className="value">
+                  {creditsPerTon != null && Number.isFinite(creditsPerTon)
+                    ? `${formatStars(creditsPerTon, 1)} CR`
+                    : '—'}
+                </div>
               </div>
               <div className="summary-item">
                 <div className="label">You receive</div>
@@ -364,13 +439,15 @@ export function Deposit({
                   +{Number(tonQuote.bonusPercent ?? 15).toFixed(0)}%
                 </div>
               </div>
-              <div className="summary-item">
-                <div className="label">Oracle</div>
-                <div className="value" style={{ fontSize: 12 }}>
-                  live
-                </div>
-              </div>
             </div>
+          )}
+          {tonQuote?.rateSource && (
+            <p className="amount-hint">
+              Rate · {tonQuote.rateSource}
+              {tonQuote.rateFetchedAt
+                ? ` · ${new Date(tonQuote.rateFetchedAt).toLocaleTimeString()}`
+                : ''}
+            </p>
           )}
 
           <button
@@ -379,7 +456,11 @@ export function Deposit({
             disabled={busy || !tonSelected}
             onClick={payTon}
           >
-            {busy ? 'Creating…' : `Pay ${tonSelected} TON`}
+            {busy
+              ? 'Creating…'
+              : tonSelected
+                ? `Pay ${tonSelected} TON`
+                : 'Enter amount'}
           </button>
 
           {lastDeposit?.provider === 'TON' && (

@@ -75,6 +75,7 @@ enum OracleAsset {
 
 enum OracleSource {
   COINGECKO
+  BINANCE
   TONAPI
   TELEGRAM_CONFIG
   TELEGRAM_TOPUP_OPTIONS

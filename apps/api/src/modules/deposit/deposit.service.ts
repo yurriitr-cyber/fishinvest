@@ -388,8 +388,8 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
   }
 
   async quoteTon(tonAmount: number) {
-    if (!Number.isFinite(tonAmount) || tonAmount < 0.1 || tonAmount > 500) {
-      throw new BadRequestException('TON amount must be between 0.1 and 500');
+    if (!Number.isFinite(tonAmount) || tonAmount < 0.05 || tonAmount > 500) {
+      throw new BadRequestException('TON amount must be between 0.05 and 500');
     }
     await this.requireProvider('TON');
     const address = (this.config.get<string>('TON_DEPOSIT_ADDRESS') || '').trim();
@@ -397,7 +397,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('TON_DEPOSIT_ADDRESS is not configured');
     }
 
-    const ton = await this.oracle.getTonUsd();
+    const ton = await this.oracle.getTonUsd({ force: true });
     const tonUsd = new Prisma.Decimal(ton.usdPrice);
     const assetAmount = new Prisma.Decimal(tonAmount.toFixed(9));
     const usdValue = assetAmount.mul(tonUsd);
@@ -422,7 +422,8 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       starUsdPrice: starUsd.toFixed(8),
       exchangeRate: creditRate.div(starUsd).mul(tonUsd).toFixed(8), // base credits per 1 TON (before bonus)
       rateSource: ton.source,
-      rateNote: `Live TON/USD ($${ton.usdPrice}) → ★@$${starUsd} + ${bonusPercent}% TON bonus`,
+      rateFetchedAt: ton.fetchedAt,
+      rateNote: `Live TON/USD ($${Number(ton.usdPrice).toFixed(4)}) → ★@$${starUsd} + ${bonusPercent}% TON bonus`,
       feePercent: feePercent.toFixed(4),
       bonusPercent: bonusPercent.toFixed(4),
       bonusAmount: bonusAmount.toFixed(4),

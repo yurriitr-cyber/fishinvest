@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { InitData } from '@telegram-apps/init-data-node';
 import { TmaAuthGuard } from '../auth/tma-auth.guard';
 import { TelegramInitData } from '../auth/telegram-init-data.decorator';
@@ -19,12 +19,14 @@ import { DepositService } from './deposit.service';
 class StarsQuoteDto {
   @IsInt()
   @Min(1)
+  @Max(50_000)
   starAmount!: number;
 }
 
 class StarsCreateDto {
   @IsInt()
   @Min(1)
+  @Max(50_000)
   starAmount!: number;
 
   @IsOptional()
@@ -63,7 +65,8 @@ class StarsPreCheckoutDto {
 
 class TonAmountDto {
   @IsNumber()
-  @Min(0.1)
+  @Min(0.05)
+  @Max(500)
   tonAmount!: number;
 
   @IsOptional()

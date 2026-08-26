@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "OracleSource" ADD VALUE IF NOT EXISTS 'BINANCE';
