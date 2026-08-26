@@ -47,11 +47,11 @@ function openAppKeyboard(startParam?: string) {
     : webAppUrl;
 
   if (url.startsWith('https://')) {
-    return new InlineKeyboard().webApp('🐟 Открыть Rare Fish Market', url);
+    return new InlineKeyboard().webApp('🐟 Открыть приложение', url);
   }
 
   return new InlineKeyboard().url(
-    '🐟 Открыть Mini App (нужен WEBAPP_URL https)',
+    '🐟 Открыть приложение (нужен WEBAPP_URL https)',
     startParam
       ? `https://t.me/${botUsername}?start=${encodeURIComponent(startParam)}`
       : `https://t.me/${botUsername}`,
@@ -87,17 +87,18 @@ bot.command('start', async (ctx) => {
 
   await ctx.reply(
     [
-      '*Rare Fish Investment*',
+      '*Rare Fish*',
+      'Инвестиции в редких рыб',
       '',
       isInvite
-        ? 'Вас пригласили — нажмите ниже, чтобы получить бонус *+50 CR*.'
-        : 'Симулированный аквариумный рынок.',
+        ? 'Вас пригласили — откройте приложение и получите *+50 CR*.'
+        : 'Симулированный аквариумный рынок: покупайте, продавайте, открывайте кейсы.',
       isInvite
-        ? 'Ваш друг получит *+300 CR*, когда вы откроете приложение.'
-        : 'Стартовый баланс — *200 игровых ⭐*.',
-      isInvite ? '' : 'Пригласите друга: ему *+50*, вам *+300*.',
+        ? 'Когда зайдёте, ваш друг получит *+300 CR*.'
+        : 'Стартовый баланс — *200 CR*.',
+      isInvite ? '' : 'Пригласите друга: ему *+50 CR*, вам *+300 CR*.',
       '',
-      '_Игровые кредиты — это не настоящие Telegram Stars._',
+      '_Игровые кредиты (CR) — не настоящие Telegram Stars._',
     ]
       .filter((line) => line !== undefined)
       .join('\n'),
@@ -109,14 +110,14 @@ bot.command('start', async (ctx) => {
 });
 
 bot.command('app', async (ctx) => {
-  await ctx.reply('Вперёд.', { reply_markup: openAppKeyboard() });
+  await ctx.reply('Открываю рынок…', { reply_markup: openAppKeyboard() });
 });
 
 bot.command('help', async (ctx) => {
   await ctx.reply(
     [
       'Команды:',
-      '/start — приветствие + открыть Mini App',
+      '/start — приветствие и открытие приложения',
       '/app — открыть рынок',
       '/help — это сообщение',
       '',
