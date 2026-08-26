@@ -303,10 +303,10 @@ export const api = {
   getDeposit: (id: string) => request<DepositRecord>(`/deposit/${id}`),
   casinoCases: () => request<LootCase[]>('/casino/cases'),
   casinoCase: (id: string) => request<LootCase>(`/casino/cases/${id}`),
-  openCase: (id: string, idempotencyKey?: string) =>
+  openCase: (id: string, idempotencyKey?: string, maxPrice?: number) =>
     request<CaseOpening>(`/casino/cases/${id}/open`, {
       method: 'POST',
-      body: JSON.stringify({ idempotencyKey }),
+      body: JSON.stringify({ idempotencyKey, maxPrice }),
     }),
   casinoOpenings: (limit = 20) =>
     request<CaseOpening[]>(`/casino/openings?limit=${limit}`),

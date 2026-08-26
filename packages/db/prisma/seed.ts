@@ -139,11 +139,17 @@ async function main() {
    * Casino cases — house edge ~18–25% vs seed prices.
    * Weights = relative odds; cheaper fish dominate, mythics are chase.
    */
+  /**
+   * Ticket price is derived at request time from the live expected value, so the
+   * numbers below are only a floor plus the target house margin. Cheap crates
+   * keep a fatter margin; the deep-water crates reward progression.
+   */
   const CASE_SEED: Array<{
     code: string;
     name: string;
     description: string;
     priceCredits: number;
+    edgePercent: number;
     sortOrder: number;
     rewards: Array<{ symbol: string; weight: number }>;
   }> = [
@@ -151,7 +157,8 @@ async function main() {
       code: 'TIDE',
       name: 'Tide Crate',
       description: 'Shallow waters. Cheap opens, mostly common bait fish.',
-      priceCredits: 25,
+      priceCredits: 0.01,
+      edgePercent: 12,
       sortOrder: 0,
       rewards: [
         { symbol: 'GLDFSH', weight: 420 },
@@ -166,7 +173,8 @@ async function main() {
       code: 'REEF',
       name: 'Reef Chest',
       description: 'Coral shelf. Rares and the first epics.',
-      priceCredits: 100,
+      priceCredits: 1,
+      edgePercent: 10,
       sortOrder: 1,
       rewards: [
         { symbol: 'CLOWN', weight: 220 },
@@ -183,7 +191,8 @@ async function main() {
       code: 'ABYSS',
       name: 'Abyss Vault',
       description: 'Pressure zone. Epics guaranteed-feeling, legendaries lurk.',
-      priceCredits: 400,
+      priceCredits: 10,
+      edgePercent: 8,
       sortOrder: 2,
       rewards: [
         { symbol: 'CBETTA', weight: 160 },
@@ -201,7 +210,8 @@ async function main() {
       code: 'LEVIATHAN',
       name: 'Leviathan Case',
       description: 'Deep money. Legendaries and mythic chase drops.',
-      priceCredits: 1500,
+      priceCredits: 50,
+      edgePercent: 6,
       sortOrder: 3,
       rewards: [
         { symbol: 'ANGEL', weight: 140 },
@@ -224,6 +234,7 @@ async function main() {
         name: c.name,
         description: c.description,
         priceCredits: c.priceCredits,
+        edgePercent: c.edgePercent,
         sortOrder: c.sortOrder,
         isActive: true,
       },
@@ -232,6 +243,7 @@ async function main() {
         name: c.name,
         description: c.description,
         priceCredits: c.priceCredits,
+        edgePercent: c.edgePercent,
         sortOrder: c.sortOrder,
         isActive: true,
       },

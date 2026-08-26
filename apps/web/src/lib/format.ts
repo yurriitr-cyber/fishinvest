@@ -7,6 +7,18 @@ export function formatStars(value: string | number, digits = 0) {
   });
 }
 
+/** Credits span many orders of magnitude, so scale precision to the amount. */
+export function formatCredits(value: string | number) {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  const digits = abs >= 100 ? 0 : abs >= 1 ? 2 : 4;
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
 export function formatPct(value: string | number) {
   const n = typeof value === 'string' ? Number(value) : value;
   if (!Number.isFinite(n)) return '—';

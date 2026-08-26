@@ -43,3 +43,27 @@ export async function bootstrapTelegram() {
     startParam: startFromUrl,
   });
 }
+
+type ImpactStyle = 'light' | 'medium' | 'heavy' | 'rigid' | 'soft';
+
+export async function hapticImpact(style: ImpactStyle = 'light') {
+  try {
+    const sdk = await import('@telegram-apps/sdk');
+    if (sdk.hapticFeedback.impactOccurred.isAvailable()) {
+      sdk.hapticFeedback.impactOccurred(style);
+    }
+  } catch {
+    /* not in Telegram */
+  }
+}
+
+export async function hapticNotify(type: 'success' | 'warning' | 'error') {
+  try {
+    const sdk = await import('@telegram-apps/sdk');
+    if (sdk.hapticFeedback.notificationOccurred.isAvailable()) {
+      sdk.hapticFeedback.notificationOccurred(type);
+    }
+  } catch {
+    /* not in Telegram */
+  }
+}

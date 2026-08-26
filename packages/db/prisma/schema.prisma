@@ -404,8 +404,13 @@ model LootCase {
   code         String   @unique
   name         String
   description  String?
-  /** Price in game credits. */
+  /** Floor price in credits — the live price never drops below this. */
   priceCredits Decimal  @map("price_credits") @db.Decimal(20, 4)
+  /**
+   * Target house margin. Fish prices float, so the ticket price is derived
+   * from the live expected value: price = EV / (1 - edge).
+   */
+  edgePercent  Decimal  @default(10) @map("edge_percent") @db.Decimal(5, 2)
   sortOrder    Int      @default(0) @map("sort_order")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")

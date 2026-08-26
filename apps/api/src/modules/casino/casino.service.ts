@@ -9,6 +9,15 @@ import { randomUUID } from 'crypto';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+type WeightedReward = {
+  weight: number;
+  quantity: number;
+  fish: {
+    currentPrice: Prisma.Decimal;
+    availableSupply: number;
+  };
+};
+
 type RewardRow = {
   id: string;
   fishId: string;
@@ -24,6 +33,9 @@ type RewardRow = {
     imageUrl: string | null;
   };
 };
+
+/** Tolerance for the price the client last saw, so a mid-roll tick is not fatal. */
+const PRICE_SLIPPAGE = 1.08;
 
 @Injectable()
 export class CasinoService {
@@ -119,7 +131,12 @@ export class CasinoService {
     }));
   }
 
-  async openCase(userId: string, caseId: string, idempotencyKey?: string) {
+  async openCase(
+    userId: string,
+    caseId: string,
+    idempotencyKey?: string,
+    maxPrice?: number,
+  ) {
     const key = idempotencyKey || `case:${userId}:${caseId}:${randomUUID()}`;
 
     try {
@@ -179,11 +196,21 @@ export class CasinoService {
           );
         }
 
+        const pricePaid = this.ticketPrice(
+          this.expectedValue(available),
+          crate.edgePercent,
+          crate.priceCredits,
+        );
+        if (maxPrice !== undefined && Number(pricePaid) > maxPrice * PRICE_SLIPPAGE) {
+          throw new BadRequestException(
+            'Case price moved — refresh and try again',
+          );
+        }
+
         const picked = this.weightedPick(available);
         const qty = picked.quantity;
         const unitPrice = picked.fish.currentPrice;
         const marketValue = unitPrice.mul(qty);
-        const pricePaid = crate.priceCredits;
 
         const reserved = await tx.fish.updateMany({
           where: { id: picked.fishId, availableSupply: { gte: qty } },
@@ -293,6 +320,47 @@ export class CasinoService {
     }
   }
 
+  /** Mean payout in credits over the rewards that can actually drop. */
+  private expectedValue(rewards: WeightedReward[]): Prisma.Decimal {
+    const totalWeight = rewards.reduce((s, r) => s + r.weight, 0);
+    if (!totalWeight) return new Prisma.Decimal(0);
+    return rewards.reduce(
+      (sum, r) =>
+        sum.add(
+          r.fish.currentPrice
+            .mul(r.quantity)
+            .mul(new Prisma.Decimal(r.weight))
+            .div(totalWeight),
+        ),
+      new Prisma.Decimal(0),
+    );
+  }
+
+  /**
+   * Fish prices drift every few seconds, so a fixed ticket price would swing the
+   * house edge wildly. Derive it from the live EV instead and keep the stored
+   * price as a floor.
+   */
+  private ticketPrice(
+    ev: Prisma.Decimal,
+    edgePercent: Prisma.Decimal,
+    floor: Prisma.Decimal,
+  ): Prisma.Decimal {
+    const keep = new Prisma.Decimal(1).sub(edgePercent.div(100));
+    if (keep.lte(0)) return floor;
+    const price = this.roundPrice(ev.div(keep));
+    return price.lt(floor) ? floor : price;
+  }
+
+  /** Snap to human-looking increments that grow with the tier. */
+  private roundPrice(value: Prisma.Decimal): Prisma.Decimal {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return new Prisma.Decimal(0);
+    const step =
+      n < 0.1 ? 0.001 : n < 1 ? 0.01 : n < 10 ? 0.1 : n < 100 ? 1 : n < 1000 ? 5 : 25;
+    return new Prisma.Decimal(Math.ceil(n / step) * step).toDecimalPlaces(4);
+  }
+
   private weightedPick(rewards: RewardRow[]): RewardRow {
     const total = rewards.reduce((s, r) => s + r.weight, 0);
     let roll = Math.random() * total;
@@ -309,6 +377,7 @@ export class CasinoService {
     name: string;
     description: string | null;
     priceCredits: Prisma.Decimal;
+    edgePercent: Prisma.Decimal;
     sortOrder: number;
     rewards: Array<{
       weight: number;
@@ -324,15 +393,21 @@ export class CasinoService {
       };
     }>;
   }) {
-    const totalWeight = c.rewards.reduce((s, r) => s + r.weight, 0) || 1;
-    let expectedValue = new Prisma.Decimal(0);
+    const droppable = c.rewards.filter(
+      (r) => r.fish.availableSupply >= r.quantity,
+    );
+    const totalWeight = droppable.reduce((s, r) => s + r.weight, 0);
+    const expectedValue = this.expectedValue(droppable);
+    const priceCredits = this.ticketPrice(
+      expectedValue,
+      c.edgePercent,
+      c.priceCredits,
+    );
+
     const loot = c.rewards
       .map((r) => {
-        const chance = (r.weight / totalWeight) * 100;
-        const value = r.fish.currentPrice.mul(r.quantity);
-        expectedValue = expectedValue.add(
-          value.mul(new Prisma.Decimal(r.weight)).div(totalWeight),
-        );
+        const canDrop = r.fish.availableSupply >= r.quantity;
+        const chance = canDrop && totalWeight ? (r.weight / totalWeight) * 100 : 0;
         return {
           fishId: r.fish.id,
           symbol: r.fish.symbol,
@@ -343,19 +418,19 @@ export class CasinoService {
           weight: r.weight,
           chancePercent: Number(chance.toFixed(2)),
           marketPrice: r.fish.currentPrice.toFixed(4),
-          available: r.fish.availableSupply > 0,
+          available: canDrop,
         };
       })
       .sort((a, b) => b.chancePercent - a.chancePercent);
 
-    const price = Number(c.priceCredits);
+    const price = Number(priceCredits);
     const ev = Number(expectedValue);
     return {
       id: c.id,
       code: c.code,
       name: c.name,
       description: c.description,
-      priceCredits: c.priceCredits.toFixed(4),
+      priceCredits: priceCredits.toFixed(4),
       sortOrder: c.sortOrder,
       expectedValue: expectedValue.toFixed(4),
       houseEdgePercent:
