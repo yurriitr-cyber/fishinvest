@@ -1,0 +1,385 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+}
+
+enum LedgerType {
+  INITIAL_BONUS
+  REFERRAL_JOIN_BONUS
+  REFERRAL_BONUS
+  DEPOSIT_STARS
+  DEPOSIT_TON
+  DEPOSIT_GIFT
+  DEPOSIT_CRYPTO
+  BUY_FISH
+  SELL_FISH
+  ADMIN_ADJUSTMENT
+  FEE
+}
+
+enum DepositStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+enum DepositProvider {
+  TELEGRAM_STARS
+  TON
+  TELEGRAM_GIFT
+  CRYPTO
+}
+
+enum FishRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+  MYTHIC
+}
+
+enum PriceSource {
+  AUTOMATIC
+  ADMIN
+  EVENT
+}
+
+enum TradeSide {
+  BUY
+  SELL
+}
+
+enum ReferralStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+}
+
+enum OracleAsset {
+  TON
+  BTC
+  ETH
+  USDT
+  TELEGRAM_STAR
+}
+
+enum OracleSource {
+  COINGECKO
+  TONAPI
+  TELEGRAM_CONFIG
+  TELEGRAM_TOPUP_OPTIONS
+  MANUAL
+}
+
+model User {
+  id                     String    @id @default(uuid()) @db.Uuid
+  telegramId             BigInt    @unique @map("telegram_id")
+  username               String?
+  firstName              String?   @map("first_name")
+  lastName               String?   @map("last_name")
+  languageCode           String?   @map("language_code")
+  photoUrl               String?   @map("photo_url")
+  isAdmin                Boolean   @default(false) @map("is_admin")
+  status                 UserStatus @default(ACTIVE)
+  referralCode           String    @unique @map("referral_code")
+  referredById           String?   @map("referred_by_id") @db.Uuid
+  referredAt             DateTime? @map("referred_at")
+  initialBonusGrantedAt  DateTime? @map("initial_bonus_granted_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  lastSeenAt             DateTime? @map("last_seen_at")
+
+  referredBy             User?     @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals              User[]    @relation("UserReferrals")
+  gameBalance            GameBalance?
+  ledgerEntries          GameBalanceLedger[]
+  portfolioPositions     PortfolioPosition[]
+  trades                 Trade[]
+  deposits               Deposit[]
+  referralsMade          Referral[] @relation("Referrer")
+  referralsReceived      Referral[] @relation("Referred")
+  adminActions           AdminAction[]
+
+  @@map("users")
+}
+
+model GameBalance {
+  userId    String   @id @map("user_id") @db.Uuid
+  available Decimal  @default(0) @db.Decimal(20, 4)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("game_balances")
+}
+
+model GameBalanceLedger {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String     @map("user_id") @db.Uuid
+  type           LedgerType
+  amount         Decimal    @db.Decimal(20, 4)
+  balanceAfter   Decimal    @map("balance_after") @db.Decimal(20, 4)
+  referenceType  String?    @map("reference_type")
+  referenceId    String?    @map("reference_id") @db.Uuid
+  idempotencyKey String     @unique @map("idempotency_key")
+  metadata       Json?
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([referenceType, referenceId])
+  @@map("game_balance_ledger")
+}
+
+model Referral {
+  id                       String         @id @default(uuid()) @db.Uuid
+  referrerId               String         @map("referrer_id") @db.Uuid
+  referredId               String         @unique @map("referred_id") @db.Uuid
+  referralCode             String         @map("referral_code")
+  referrerBonusAmount      Decimal        @default(300) @map("referrer_bonus_amount") @db.Decimal(20, 4)
+  referredJoinBonusAmount  Decimal        @default(50) @map("referred_join_bonus_amount") @db.Decimal(20, 4)
+  referrerLedgerId         String?        @unique @map("referrer_ledger_id") @db.Uuid
+  referredJoinLedgerId     String?        @unique @map("referred_join_ledger_id") @db.Uuid
+  status                   ReferralStatus @default(COMPLETED)
+  rejectReason             String?        @map("reject_reason")
+  createdAt                DateTime       @default(now()) @map("created_at")
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id])
+  referred User @relation("Referred", fields: [referredId], references: [id])
+
+  @@unique([referrerId, referredId])
+  @@index([referrerId, createdAt(sort: Desc)])
+  @@map("referrals")
+}
+
+model Fish {
+  id                 String     @id @default(uuid()) @db.Uuid
+  symbol             String     @unique
+  name               String
+  description        String?
+  rarity             FishRarity
+  currentPrice       Decimal    @map("current_price") @db.Decimal(20, 4)
+  previousPrice      Decimal    @map("previous_price") @db.Decimal(20, 4)
+  dailyChangePercent Decimal    @default(0) @map("daily_change_percent") @db.Decimal(10, 4)
+  allTimeHigh        Decimal    @map("all_time_high") @db.Decimal(20, 4)
+  allTimeLow         Decimal    @map("all_time_low") @db.Decimal(20, 4)
+  volatility         Decimal    @db.Decimal(10, 6)
+  trend              Decimal    @db.Decimal(10, 6)
+  momentum           Decimal    @default(0) @db.Decimal(10, 6)
+  minPrice           Decimal    @map("min_price") @db.Decimal(20, 4)
+  maxPrice           Decimal    @map("max_price") @db.Decimal(20, 4)
+  isActive           Boolean    @default(true) @map("is_active")
+  isFrozen           Boolean    @default(false) @map("is_frozen")
+  imageUrl           String?    @map("image_url")
+  sortOrder          Int        @default(0) @map("sort_order")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  priceHistory       PriceHistory[]
+  portfolioPositions PortfolioPosition[]
+  trades             Trade[]
+  marketEvents       MarketEvent[]
+
+  @@map("fish")
+}
+
+model PriceHistory {
+  id             String      @id @default(uuid()) @db.Uuid
+  fishId         String      @map("fish_id") @db.Uuid
+  price          Decimal     @db.Decimal(20, 4)
+  previousPrice  Decimal     @map("previous_price") @db.Decimal(20, 4)
+  changePercent  Decimal     @map("change_percent") @db.Decimal(10, 4)
+  source         PriceSource
+  marketEventId  String?     @map("market_event_id") @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  fish        Fish         @relation(fields: [fishId], references: [id], onDelete: Cascade)
+  marketEvent MarketEvent? @relation(fields: [marketEventId], references: [id])
+
+  @@index([fishId, createdAt(sort: Desc)])
+  @@map("price_history")
+}
+
+model PortfolioPosition {
+  id             String  @id @default(uuid()) @db.Uuid
+  userId         String  @map("user_id") @db.Uuid
+  fishId         String  @map("fish_id") @db.Uuid
+  quantity       Decimal @db.Decimal(20, 4)
+  avgBuyPrice    Decimal @map("avg_buy_price") @db.Decimal(20, 4)
+  totalInvested  Decimal @map("total_invested") @db.Decimal(20, 4)
+  realizedPnl    Decimal @default(0) @map("realized_pnl") @db.Decimal(20, 4)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fish Fish @relation(fields: [fishId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fishId])
+  @@map("portfolio_positions")
+}
+
+model Trade {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  fishId          String    @map("fish_id") @db.Uuid
+  side            TradeSide
+  quantity        Decimal   @db.Decimal(20, 4)
+  unitPrice       Decimal   @map("unit_price") @db.Decimal(20, 4)
+  totalAmount     Decimal   @map("total_amount") @db.Decimal(20, 4)
+  realizedPnl     Decimal?  @map("realized_pnl") @db.Decimal(20, 4)
+  idempotencyKey  String    @unique @map("idempotency_key")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fish Fish @relation(fields: [fishId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([fishId, createdAt(sort: Desc)])
+  @@map("trades")
+}
+
+model MarketEvent {
+  id               String    @id @default(uuid()) @db.Uuid
+  fishId           String?   @map("fish_id") @db.Uuid
+  name             String
+  description      String?
+  priceMultiplier  Decimal   @map("price_multiplier") @db.Decimal(10, 4)
+  startTime        DateTime  @map("start_time")
+  endTime          DateTime  @map("end_time")
+  isActive         Boolean   @default(true) @map("is_active")
+  createdById      String?   @map("created_by_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  fish         Fish?          @relation(fields: [fishId], references: [id])
+  priceHistory PriceHistory[]
+
+  @@map("market_events")
+}
+
+model Deposit {
+  id                    String          @id @default(uuid()) @db.Uuid
+  userId                String          @map("user_id") @db.Uuid
+  provider              DepositProvider
+  assetType             String          @map("asset_type")
+  assetAmount           Decimal         @map("asset_amount") @db.Decimal(20, 8)
+  assetUsdValue         Decimal?        @map("asset_usd_value") @db.Decimal(20, 8)
+  starValueUsd          Decimal?        @map("star_value_usd") @db.Decimal(20, 8)
+  starValueSource       OracleSource?   @map("star_value_source")
+  starValueTimestamp    DateTime?       @map("star_value_timestamp")
+  exchangeRate          Decimal?        @map("exchange_rate") @db.Decimal(20, 8)
+  grossGameCredits      Decimal?        @map("gross_game_credits") @db.Decimal(20, 4)
+  feePercent            Decimal?        @map("fee_percent") @db.Decimal(10, 4)
+  feeAmount             Decimal?        @map("fee_amount") @db.Decimal(20, 4)
+  gameCreditAmount      Decimal?        @map("game_credit_amount") @db.Decimal(20, 4)
+  status                DepositStatus   @default(PENDING)
+  externalTransactionId String?         @unique @map("external_transaction_id")
+  oracleSource          String?         @map("oracle_source")
+  quoteExpiresAt        DateTime?       @map("quote_expires_at")
+  confirmedAt           DateTime?       @map("confirmed_at")
+  metadata              Json?
+  idempotencyKey        String          @unique @map("idempotency_key")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentTransactions PaymentTransaction[]
+  telegramGift        TelegramGift?
+
+  @@map("deposits")
+}
+
+model PaymentTransaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  depositId String   @map("deposit_id") @db.Uuid
+  step      String
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  deposit Deposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+
+  @@map("payment_transactions")
+}
+
+model PaymentProviderConfig {
+  id          String          @id @default(uuid()) @db.Uuid
+  code        DepositProvider @unique
+  isEnabled   Boolean         @default(false) @map("is_enabled")
+  feePercent  Decimal         @default(0) @map("fee_percent") @db.Decimal(10, 4)
+  minDeposit  Decimal?        @map("min_deposit") @db.Decimal(20, 8)
+  maxDeposit  Decimal?        @map("max_deposit") @db.Decimal(20, 8)
+  config      Json?
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@map("payment_providers")
+}
+
+model ExchangeRate {
+  id            String    @id @default(uuid()) @db.Uuid
+  fromAsset     String    @map("from_asset")
+  toAsset       String    @map("to_asset")
+  rate          Decimal   @db.Decimal(20, 8)
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  createdById   String?   @map("created_by_id") @db.Uuid
+
+  @@map("exchange_rates")
+}
+
+model PriceOracleSnapshot {
+  id              String       @id @default(uuid()) @db.Uuid
+  asset           OracleAsset
+  usdPrice        Decimal      @map("usd_price") @db.Decimal(20, 8)
+  source          OracleSource
+  sourcePriority  Int          @map("source_priority")
+  rawPayload      Json?        @map("raw_payload")
+  fetchedAt       DateTime     @map("fetched_at")
+  expiresAt       DateTime     @map("expires_at")
+  isValid         Boolean      @default(true) @map("is_valid")
+
+  @@index([asset, fetchedAt(sort: Desc)])
+  @@map("price_oracle_snapshots")
+}
+
+model TelegramGift {
+  id                   String        @id @default(uuid()) @db.Uuid
+  depositId            String        @unique @map("deposit_id") @db.Uuid
+  giftId               String        @unique @map("gift_id")
+  giftType             String?       @map("gift_type")
+  estimatedRealValue   Decimal?      @map("estimated_real_value") @db.Decimal(20, 8)
+  valuationSource      String?       @map("valuation_source")
+  valuationTimestamp   DateTime?     @map("valuation_timestamp")
+  gameCreditAmount     Decimal?      @map("game_credit_amount") @db.Decimal(20, 4)
+  status               DepositStatus
+  metadata             Json?
+  createdAt            DateTime      @default(now()) @map("created_at")
+
+  deposit Deposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+
+  @@map("telegram_gifts")
+}
+
+model AdminAction {
+  id          String   @id @default(uuid()) @db.Uuid
+  adminUserId String   @map("admin_user_id") @db.Uuid
+  actionType  String   @map("action_type")
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id") @db.Uuid
+  beforeState Json?    @map("before_state")
+  afterState  Json?    @map("after_state")
+  reason      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  adminUser User @relation(fields: [adminUserId], references: [id])
+
+  @@map("admin_actions")
+}

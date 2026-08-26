@@ -1,0 +1,25 @@
+{
+  "name": "rare-fish-investment",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:generate": "pnpm --filter @rare-fish/db generate",
+    "db:migrate": "pnpm --filter @rare-fish/db migrate",
+    "db:migrate:deploy": "pnpm --filter @rare-fish/db migrate:deploy",
+    "db:seed": "pnpm --filter @rare-fish/db seed",
+    "db:studio": "pnpm --filter @rare-fish/db studio",
+    "db:up": "node scripts/start-embedded-postgres.mjs",
+    "start:api:prod": "node scripts/start-api.mjs"
+  },
+  "devDependencies": {
+    "embedded-postgres": "18.4.0-beta.17",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/bottomnav.tsx","./src/lib/api.ts","./src/lib/format.ts","./src/lib/telegram.ts","./src/pages/deposit.tsx","./src/pages/leaderboard.tsx","./src/pages/market.tsx","./src/pages/portfolio.tsx","./src/pages/referrals.tsx","./src/pages/trade.tsx","./src/pages/welcome.tsx"],"errors":true,"version":"5.9.3"}
