@@ -6,7 +6,7 @@ import { Market } from './pages/Market';
 import { Trade } from './pages/Trade';
 import { PortfolioPage } from './pages/Portfolio';
 import { Deposit } from './pages/Deposit';
-import { LeaderboardPage } from './pages/Leaderboard';
+import { Casino } from './pages/Casino';
 import { Referrals } from './pages/Referrals';
 
 export default function App() {
@@ -126,8 +126,16 @@ export default function App() {
           />
         );
         break;
-      case 'leaders':
-        body = <LeaderboardPage />;
+      case 'casino':
+        body = (
+          <Casino
+            me={me}
+            onOpened={async () => {
+              await refreshMe();
+            }}
+            notify={notify}
+          />
+        );
         break;
       case 'invite':
         body = <Referrals me={me} notify={notify} />;

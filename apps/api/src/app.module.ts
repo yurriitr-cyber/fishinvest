@@ -13,6 +13,7 @@ import { EventsModule } from './modules/events/events.module';
 import { DepositModule } from './modules/deposit/deposit.module';
 import { OracleModule } from './modules/oracle/oracle.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { CasinoModule } from './modules/casino/casino.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { HealthController } from './health.controller';
 
@@ -36,6 +37,7 @@ import { HealthController } from './health.controller';
     DepositModule,
     OracleModule,
     AdminModule,
+    CasinoModule,
   ],
   controllers: [HealthController],
 })

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type Tab = 'market' | 'portfolio' | 'deposit' | 'leaders' | 'invite';
+export type Tab = 'market' | 'portfolio' | 'deposit' | 'casino' | 'invite';
 
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -53,13 +53,12 @@ const ITEMS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
     ),
   },
   {
-    id: 'leaders',
-    label: 'Ranks',
+    id: 'casino',
+    label: 'Casino',
     icon: (
       <Icon>
-        <path d="M4 20V12h4v8" />
-        <path d="M10 20V5h4v15" />
-        <path d="M16 20v-6h4v6" />
+        <rect x="4" y="6" width="16" height="12" rx="2" />
+        <path d="M8 10h.01M12 10h.01M16 10h.01M8 14h8" />
       </Icon>
     ),
   },

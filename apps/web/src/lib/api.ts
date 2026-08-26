@@ -100,6 +100,49 @@ export type ReferralStats = {
   }>;
 };
 
+export type CaseLootItem = {
+  fishId: string;
+  symbol: string;
+  name: string;
+  rarity: string;
+  imageUrl: string | null;
+  quantity: number;
+  weight: number;
+  chancePercent: number;
+  marketPrice: string;
+  available: boolean;
+};
+
+export type LootCase = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  priceCredits: string;
+  sortOrder: number;
+  expectedValue: string;
+  houseEdgePercent: number;
+  loot: CaseLootItem[];
+};
+
+export type CaseOpening = {
+  id: string;
+  caseCode: string;
+  caseName: string;
+  fishId: string;
+  symbol: string;
+  name: string;
+  rarity: string;
+  imageUrl: string | null;
+  quantity: number;
+  pricePaid: string;
+  fishUnitPrice: string;
+  fishMarketValue: string;
+  currentPrice?: string;
+  profit?: string;
+  createdAt: string;
+};
+
 export type DepositMethod = {
   code: string;
   label: string;
@@ -258,4 +301,13 @@ export const api = {
   checkTonDeposit: (id: string) =>
     request<DepositRecord>(`/deposit/ton/${id}/check`, { method: 'POST' }),
   getDeposit: (id: string) => request<DepositRecord>(`/deposit/${id}`),
+  casinoCases: () => request<LootCase[]>('/casino/cases'),
+  casinoCase: (id: string) => request<LootCase>(`/casino/cases/${id}`),
+  openCase: (id: string, idempotencyKey?: string) =>
+    request<CaseOpening>(`/casino/cases/${id}/open`, {
+      method: 'POST',
+      body: JSON.stringify({ idempotencyKey }),
+    }),
+  casinoOpenings: (limit = 20) =>
+    request<CaseOpening[]>(`/casino/openings?limit=${limit}`),
 };

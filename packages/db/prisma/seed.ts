@@ -134,6 +134,126 @@ async function main() {
   });
 
   console.log(`Seeded ${FISH_SEED.length} fish with supply + price ladder.`);
+
+  /**
+   * Casino cases — house edge ~18–25% vs seed prices.
+   * Weights = relative odds; cheaper fish dominate, mythics are chase.
+   */
+  const CASE_SEED: Array<{
+    code: string;
+    name: string;
+    description: string;
+    priceCredits: number;
+    sortOrder: number;
+    rewards: Array<{ symbol: string; weight: number }>;
+  }> = [
+    {
+      code: 'TIDE',
+      name: 'Tide Crate',
+      description: 'Shallow waters. Cheap opens, mostly common bait fish.',
+      priceCredits: 25,
+      sortOrder: 0,
+      rewards: [
+        { symbol: 'GLDFSH', weight: 420 },
+        { symbol: 'NEON', weight: 320 },
+        { symbol: 'CATFSH', weight: 180 },
+        { symbol: 'CLOWN', weight: 60 },
+        { symbol: 'HORSE', weight: 18 },
+        { symbol: 'DGUPPY', weight: 2 },
+      ],
+    },
+    {
+      code: 'REEF',
+      name: 'Reef Chest',
+      description: 'Coral shelf. Rares and the first epics.',
+      priceCredits: 100,
+      sortOrder: 1,
+      rewards: [
+        { symbol: 'CLOWN', weight: 220 },
+        { symbol: 'HORSE', weight: 180 },
+        { symbol: 'DGUPPY', weight: 160 },
+        { symbol: 'PIRANA', weight: 140 },
+        { symbol: 'CBETTA', weight: 100 },
+        { symbol: 'BARRA', weight: 70 },
+        { symbol: 'QKOI', weight: 25 },
+        { symbol: 'ANGEL', weight: 5 },
+      ],
+    },
+    {
+      code: 'ABYSS',
+      name: 'Abyss Vault',
+      description: 'Pressure zone. Epics guaranteed-feeling, legendaries lurk.',
+      priceCredits: 400,
+      sortOrder: 2,
+      rewards: [
+        { symbol: 'CBETTA', weight: 160 },
+        { symbol: 'BARRA', weight: 150 },
+        { symbol: 'QKOI', weight: 140 },
+        { symbol: 'ANGEL', weight: 120 },
+        { symbol: 'AROWANA', weight: 90 },
+        { symbol: 'EPUFFER', weight: 55 },
+        { symbol: 'ASHARK', weight: 25 },
+        { symbol: 'BDRAGON', weight: 8 },
+        { symbol: 'STING', weight: 2 },
+      ],
+    },
+    {
+      code: 'LEVIATHAN',
+      name: 'Leviathan Case',
+      description: 'Deep money. Legendaries and mythic chase drops.',
+      priceCredits: 1500,
+      sortOrder: 3,
+      rewards: [
+        { symbol: 'ANGEL', weight: 140 },
+        { symbol: 'AROWANA', weight: 160 },
+        { symbol: 'EPUFFER', weight: 140 },
+        { symbol: 'ASHARK', weight: 110 },
+        { symbol: 'BDRAGON', weight: 80 },
+        { symbol: 'STING', weight: 45 },
+        { symbol: 'MANTA', weight: 25 },
+        { symbol: 'MWHALE', weight: 10 },
+      ],
+    },
+  ];
+
+  console.log('Seeding casino cases…');
+  for (const c of CASE_SEED) {
+    const row = await prisma.lootCase.upsert({
+      where: { code: c.code },
+      update: {
+        name: c.name,
+        description: c.description,
+        priceCredits: c.priceCredits,
+        sortOrder: c.sortOrder,
+        isActive: true,
+      },
+      create: {
+        code: c.code,
+        name: c.name,
+        description: c.description,
+        priceCredits: c.priceCredits,
+        sortOrder: c.sortOrder,
+        isActive: true,
+      },
+    });
+
+    for (const r of c.rewards) {
+      const fish = await prisma.fish.findUnique({ where: { symbol: r.symbol } });
+      if (!fish) continue;
+      await prisma.caseReward.upsert({
+        where: { caseId_fishId: { caseId: row.id, fishId: fish.id } },
+        update: { weight: r.weight, quantity: 1 },
+        create: {
+          caseId: row.id,
+          fishId: fish.id,
+          weight: r.weight,
+          quantity: 1,
+        },
+      });
+    }
+  }
+
+  console.log(`Seeded ${CASE_SEED.length} casino cases.`);
   console.log('Sample referral code generator:', generateReferralCode());
 }
 
