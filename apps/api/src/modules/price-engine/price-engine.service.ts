@@ -22,14 +22,24 @@ function parseIntervalMs(value: string | undefined): number {
   }
 }
 
-/** Residual jitter when no admin ramp is active — crypto-like micro moves per tick. */
-function tickStep(price: number, volatility: number): number {
-  // Seed vols are ~0.02–0.42 (daily-ish). At ~3–5s ticks, real markets move
-  // ~0.02–0.25% typically; memecoins a bit more. Keep abs floor tiny for cheap fish.
+/**
+ * Per-tick absolute step sized so a random walk drifts ~1–2%/hour on average.
+ * Seed vols ~0.02–0.42: cheap/common fish move more, mythics a bit less.
+ */
+function tickStep(
+  price: number,
+  volatility: number,
+  intervalMs: number,
+): number {
   const vol = Math.max(0.01, Math.min(1, volatility));
-  const pct = vol * (0.0012 + Math.random() * 0.0028); // ~0.012%–0.4% for normal vols
-  const abs = price * pct;
-  const floor = price < 0.1 ? 0.00001 : price < 1 ? 0.00005 : 0.0002;
+  const ticksPerHour = Math.max(60, 3_600_000 / Math.max(2000, intervalMs));
+  // Target RMS move over an hour (fraction of price), scaled by volatility.
+  const hourTarget = 0.01 + vol * 0.03; // ~1.0% … ~2.3%
+  const stepPct = hourTarget / Math.sqrt(ticksPerHour);
+  const jitter = 0.65 + Math.random() * 0.7; // 0.65×–1.35×
+  const abs = price * stepPct * jitter;
+  // Always at least one 4-decimal ULP so cheap fish don't freeze at 0.0000.
+  const floor = price < 1 ? 0.0001 : price < 100 ? 0.001 : 0.01;
   return Math.max(floor, abs);
 }
 
@@ -158,34 +168,64 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
         source = 'ADMIN';
       }
     } else {
-      // Free market: quiet GBM-ish drift (crypto spot tape), not casino jumps.
-      const anchor = previous || current;
-      const pullStrength = Math.max(0.08, 0.35 - vol * 0.4);
-      const pull = (anchor - current) * pullStrength;
-      const legacyDrift = current * trend * 0.0004;
-      const step = tickStep(current, vol);
+      // Free market: random walk aimed at ~1–2% RMS move per hour.
+      const step = tickStep(current, vol, this.intervalMs);
+      // Mild mean-reversion to last price so we don't runaway, but weak enough
+      // to let the hour-scale walk accumulate.
+      const pull = (previous - current) * 0.04;
+      const legacyDrift = current * trend * 0.002;
       const noise = (Math.random() * 2 - 1) * step;
-      let delta = pull + legacyDrift + noise + momentum * current * 0.012;
+      let delta =
+        pull + legacyDrift + noise + momentum * current * 0.08;
 
       if (eventMultiplier) {
-        // Events still matter, but don't dump several % every 3s.
-        delta += current * (Number(eventMultiplier) - 1) * 0.008;
+        delta += current * (Number(eventMultiplier) - 1) * 0.01;
       }
 
-      // Hard cap ≈ 0.8% per tick (rare memecoin spike); typical << that.
-      const maxPct = Math.min(0.008, Math.max(0.0012, vol * 0.018));
-      const maxAbs = Math.max(step * 1.25, current * maxPct);
+      // Cap a single tick ~0.35% so the tape doesn't jump like a slot machine.
+      const maxPct = Math.min(0.0035, Math.max(0.0015, vol * 0.012));
+      const maxAbs = Math.max(step * 1.4, current * maxPct);
       delta = Math.max(-maxAbs, Math.min(maxAbs, delta));
       newPrice = current + delta;
     }
 
     newPrice = Math.max(Number(fish.minPrice), Math.min(Number(fish.maxPrice), newPrice));
-    newPrice = Math.round(newPrice * 10000) / 10000;
+    let rounded = Math.round(newPrice * 10000) / 10000;
+    // If the move rounded away, nudge one ULP in the intended direction.
+    if (rounded === current && newPrice !== current) {
+      rounded = current + (newPrice > current ? 0.0001 : -0.0001);
+      rounded = Math.max(
+        Number(fish.minPrice),
+        Math.min(Number(fish.maxPrice), rounded),
+      );
+    }
+    newPrice = rounded;
 
     const prevDec = fish.currentPrice;
     const price = new Prisma.Decimal(newPrice);
-    const changePercent = prevDec.gt(0)
-      ? price.sub(prevDec).div(prevDec).mul(100)
+
+    // Market % = change vs ~1h ago (not last tick), so the board isn't stuck at 0.
+    const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    let base = (
+      await this.prisma.db.priceHistory.findFirst({
+        where: { fishId: fish.id, createdAt: { lte: hourAgo } },
+        orderBy: { createdAt: 'desc' },
+        select: { price: true },
+      })
+    )?.price;
+    if (!base) {
+      // First hour after deploy: measure from earliest tick we have.
+      base = (
+        await this.prisma.db.priceHistory.findFirst({
+          where: { fishId: fish.id },
+          orderBy: { createdAt: 'asc' },
+          select: { price: true },
+        })
+      )?.price;
+    }
+    if (!base) base = prevDec;
+    const changePercent = base.gt(0)
+      ? price.sub(base).div(base).mul(100)
       : new Prisma.Decimal(0);
 
     const newMomentum = new Prisma.Decimal(
