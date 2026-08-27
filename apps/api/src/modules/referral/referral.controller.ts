@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { InitData } from '@telegram-apps/init-data-node';
 import { TmaAuthGuard } from '../auth/tma-auth.guard';
 import { TelegramInitData } from '../auth/telegram-init-data.decorator';
@@ -17,5 +17,11 @@ export class ReferralController {
   async list(@TelegramInitData() initData: InitData) {
     const { user } = await this.users.getOrCreateFromInitData(initData);
     return this.referrals.getStats(user.id);
+  }
+
+  @Post('share-card')
+  async shareCard(@TelegramInitData() initData: InitData) {
+    const { user } = await this.users.getOrCreateFromInitData(initData);
+    return this.referrals.sendShareCard(user.id);
   }
 }

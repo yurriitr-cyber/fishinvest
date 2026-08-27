@@ -314,6 +314,13 @@ export const api = {
     }),
   leaderboard: () => request<Leaderboard>('/leaderboard'),
   referrals: () => request<ReferralStats>('/referrals'),
+  referralShareCard: () =>
+    request<{
+      ok: boolean;
+      botUsername: string;
+      deepLink: string;
+      openBotUrl: string;
+    }>('/referrals/share-card', { method: 'POST', body: '{}' }),
   depositMethods: () => request<DepositMethod[]>('/deposit/methods'),
   quoteStars: (starAmount: number) =>
     request<StarsQuote>('/deposit/stars/quote', {
