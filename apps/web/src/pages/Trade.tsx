@@ -98,10 +98,11 @@ export function Trade({
       setFish(refreshed);
       await refreshOwned();
       await onTraded();
+      const label = fishName(fish.symbol, fish.name);
       notify(
         side === 'buy'
-          ? `Куплено ${quantity} ${fish.symbol}`
-          : `Продано ${quantity} ${fish.symbol}`,
+          ? `Куплено ${quantity} ${label}`
+          : `Продано ${quantity} ${label}`,
       );
     } catch (e) {
       setError(
@@ -129,7 +130,7 @@ export function Trade({
       setConfirmSellAll(false);
       await hapticNotify('success');
       await onTraded();
-      notify(`Продано всё: ${ownedQty} ${fish.symbol}`);
+      notify(`Продано всё: ${ownedQty} ${fishName(fish.symbol, fish.name)}`);
     } catch (e) {
       await hapticNotify('error');
       setConfirmSellAll(false);
@@ -176,8 +177,9 @@ export function Trade({
                 <div className="eyebrow">{rarityLabel(fish.rarity)}</div>
                 <h1>{fishName(fish.symbol, fish.name)}</h1>
                 <p>
-                  {fish.symbol}
-                  {hasOwned ? ` · у вас ${formatQty(ownedQty)} шт` : ''}
+                  {hasOwned
+                    ? `У вас ${formatQty(ownedQty)} шт`
+                    : rarityLabel(fish.rarity)}
                 </p>
               </div>
             </div>
@@ -305,7 +307,7 @@ export function Trade({
                 ? 'Отправка…'
                 : side === 'buy' && soldOut
                   ? 'Распродано'
-                  : `${side === 'buy' ? 'Купить' : 'Продать'} ${fish.symbol}`}
+                  : `${side === 'buy' ? 'Купить' : 'Продать'} ${fishName(fish.symbol, fish.name)}`}
             </button>
           </div>
         </>
@@ -322,8 +324,9 @@ export function Trade({
             <div className="eyebrow">Подтверждение</div>
             <h2 id="sell-one-all-title">Продать всё?</h2>
             <p>
-              Продадите все {formatQty(ownedQty)} шт {fish.symbol} по текущей
-              цене рынка. Это нельзя отменить.
+              Продадите все {formatQty(ownedQty)} шт{' '}
+              {fishName(fish.symbol, fish.name)} по текущей цене рынка. Это
+              нельзя отменить.
             </p>
             <div className="confirm-actions">
               <button

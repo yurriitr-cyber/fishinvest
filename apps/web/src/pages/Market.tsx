@@ -111,10 +111,8 @@ export function Market({
               <div className="row-main">
                 <div className="name">{fishName(f.symbol, f.name)}</div>
                 <div className="meta">
-                  {f.symbol}
-                  {f.isFrozen ? ' · фриз' : ''}
-                  {' · '}
                   {formatSupply(left)} ост.
+                  {f.isFrozen ? ' · фриз' : ''}
                 </div>
                 <div className="supply-bar" aria-hidden>
                   <span style={{ width: `${pct}%` }} />

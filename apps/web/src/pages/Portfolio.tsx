@@ -178,7 +178,7 @@ export function PortfolioPage({
                 <div className="row-main">
                   <div className="name">{fishName(p.symbol, p.name)}</div>
                   <div className="meta">
-                    {p.symbol} · ср. {formatStars(p.avgBuyPrice, 2)} ·{' '}
+                    ср. {formatStars(p.avgBuyPrice, 2)} ·{' '}
                     {formatStars(p.currentValue, 2)} CR
                   </div>
                 </div>
