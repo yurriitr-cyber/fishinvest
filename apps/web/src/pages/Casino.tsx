@@ -189,6 +189,7 @@ export function Casino({
 
   function finishReveal(result: CaseOpening) {
     setReveal(result);
+    setHistory((prev) => [result, ...prev.filter((o) => o.id !== result.id)].slice(0, 12));
     setBusy(false);
     const profit = Number(result.profit ?? 0);
     void hapticNotify(profit >= 0 ? 'success' : 'warning');
@@ -237,7 +238,6 @@ export function Casino({
     }
 
     void onOpened();
-    setHistory((prev) => [result, ...prev].slice(0, 12));
     api.casinoCases().then(setCases).catch(() => undefined);
 
     if (fastMode) {
