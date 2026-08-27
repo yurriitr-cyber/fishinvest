@@ -109,9 +109,9 @@ export function Market({
                 alt=""
               />
               <div className="row-main">
-                <div className="name">{f.symbol}</div>
+                <div className="name">{fishName(f.symbol, f.name)}</div>
                 <div className="meta">
-                  {fishName(f.symbol, f.name)}
+                  {f.symbol}
                   {f.isFrozen ? ' · фриз' : ''}
                   {' · '}
                   {formatSupply(left)} ост.

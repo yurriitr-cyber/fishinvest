@@ -174,9 +174,9 @@ export function Trade({
               />
               <div>
                 <div className="eyebrow">{rarityLabel(fish.rarity)}</div>
-                <h1>{fish.symbol}</h1>
+                <h1>{fishName(fish.symbol, fish.name)}</h1>
                 <p>
-                  {fishName(fish.symbol, fish.name)}
+                  {fish.symbol}
                   {hasOwned ? ` · у вас ${formatQty(ownedQty)} шт` : ''}
                 </p>
               </div>

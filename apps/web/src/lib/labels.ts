@@ -1,24 +1,24 @@
-/** Client-side Russian labels for DB English names / codes. */
+/** Client-side labels for fish display names / codes. */
 
 const FISH_NAMES: Record<string, string> = {
-  GLDFSH: 'Глитч-золотая рыбка',
-  NEON: 'Неоновая тетра',
-  CATFSH: 'Бездонный сом',
-  CLOWN: 'Рыба-клоун аномалии',
-  HORSE: 'Пиксельный морской конёк',
-  DGUPPY: 'Алмазная гуппи',
-  PIRANA: 'Хаос-пиранья',
-  CBETTA: 'Космическая петушковая',
-  BARRA: 'Лазерная барракуда',
-  QKOI: 'Квантовый кои',
-  ANGEL: 'Лунный ангел',
-  AROWANA: 'Золотая арована',
-  EPUFFER: 'Императорский иглобрюх',
-  ASHARK: 'Альбинос-акула',
-  BDRAGON: 'Чёрный драконорыл',
-  STING: 'Скат Пустоты',
-  MANTA: 'Глубинная манта',
-  MWHALE: 'Мега-кит',
+  GLDFSH: 'GOLDI',
+  NEON: 'GRACEFULLY',
+  CATFSH: 'ZOOFI',
+  CLOWN: 'PORCUPINEFISH',
+  HORSE: 'LIONFISH',
+  DGUPPY: 'MEG',
+  PIRANA: 'MONKFISH',
+  CBETTA: 'SQUIDI',
+  BARRA: 'GIGA JELLY',
+  QKOI: 'BLOOP',
+  ANGEL: 'MOZZI',
+  AROWANA: 'TWISTY TOOTH',
+  EPUFFER: 'WHALE',
+  ASHARK: 'STINGY',
+  BDRAGON: 'MONSTER',
+  STING: 'DEEP FEAR',
+  MANTA: 'MANTA',
+  MWHALE: 'MEGA WHALE',
 };
 
 const RARITY: Record<string, string> = {
@@ -91,9 +91,9 @@ export function depositStatus(status: string) {
 export function translateError(message: string) {
   for (const [key, ru] of ERROR_MAP) {
     if (typeof key === 'string') {
-      if (message.includes(key)) return message.replace(key, ru);
+      if (message === key || message.includes(key)) return ru;
     } else if (key.test(message)) {
-      return message.replace(key, ru);
+      return ru;
     }
   }
   return message;

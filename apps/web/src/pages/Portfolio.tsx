@@ -7,7 +7,7 @@ import {
   pnlClass,
 } from '../lib/format';
 import { hapticImpact, hapticNotify } from '../lib/telegram';
-import { translateError } from '../lib/labels';
+import { fishName, translateError } from '../lib/labels';
 
 function formatQty(value: string | number) {
   const n = typeof value === 'string' ? Number(value) : value;
@@ -176,9 +176,9 @@ export function PortfolioPage({
                   alt=""
                 />
                 <div className="row-main">
-                  <div className="name">{p.symbol}</div>
+                  <div className="name">{fishName(p.symbol, p.name)}</div>
                   <div className="meta">
-                    ср. {formatStars(p.avgBuyPrice, 2)} ·{' '}
+                    {p.symbol} · ср. {formatStars(p.avgBuyPrice, 2)} ·{' '}
                     {formatStars(p.currentValue, 2)} CR
                   </div>
                 </div>

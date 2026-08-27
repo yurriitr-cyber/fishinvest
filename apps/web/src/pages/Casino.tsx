@@ -427,9 +427,10 @@ export function Casino({
                     <img src={fishImage(item.symbol, item.imageUrl)} alt="" />
                   </div>
                   <div className="row-main">
-                    <div className="name">{item.symbol}</div>
+                    <div className="name">{fishName(item.symbol, item.name)}</div>
                     <div className="meta">
-                      {rarityLabel(item.rarity)} · {formatCredits(item.marketPrice)} CR
+                      {item.symbol} · {rarityLabel(item.rarity)} ·{' '}
+                      {formatCredits(item.marketPrice)} CR
                       {item.available ? '' : ' · распродано'}
                     </div>
                     <div className="odds-bar" aria-hidden>
