@@ -8,6 +8,7 @@ import { Prisma } from '@rare-fish/db';
 import { randomUUID } from 'crypto';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { fishDisplayName } from '../fish/fish-names';
 
 type WeightedReward = {
   weight: number;
@@ -119,7 +120,7 @@ export class CasinoService {
       caseName: o.lootCase.name,
       fishId: o.fish.id,
       symbol: o.fish.symbol,
-      name: o.fish.name,
+      name: fishDisplayName(o.fish.symbol, o.fish.name),
       rarity: o.fish.rarity,
       imageUrl: o.fish.imageUrl || `/fish/${o.fish.symbol}.jpg`,
       quantity: o.quantity,
@@ -411,7 +412,7 @@ export class CasinoService {
         return {
           fishId: r.fish.id,
           symbol: r.fish.symbol,
-          name: r.fish.name,
+          name: fishDisplayName(r.fish.symbol, r.fish.name),
           rarity: r.fish.rarity,
           imageUrl: r.fish.imageUrl || `/fish/${r.fish.symbol}.jpg`,
           quantity: r.quantity,
@@ -464,7 +465,7 @@ export class CasinoService {
       caseName: o.lootCase.name,
       fishId: o.fish.id,
       symbol: o.fish.symbol,
-      name: o.fish.name,
+      name: fishDisplayName(o.fish.symbol, o.fish.name),
       rarity: o.fish.rarity,
       imageUrl: o.fish.imageUrl || `/fish/${o.fish.symbol}.jpg`,
       quantity: o.quantity,

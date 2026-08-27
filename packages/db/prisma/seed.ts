@@ -34,9 +34,9 @@ const FISH_SEED: Array<{
   { symbol: 'ASHARK', name: 'STINGY', rarity: FishRarity.LEGENDARY, price: 476, supply: 50_000, volatility: 0.055, trend: 0.012, hasArt: true },
   { symbol: 'BDRAGON', name: 'MONSTER', rarity: FishRarity.LEGENDARY, price: 765, supply: 10_000, volatility: 0.045, trend: 0.015, hasArt: true },
   // Top mythics (≥600 ladder): ×3 vs previous seed
-  { symbol: 'STING', name: 'DEEP FEAR', rarity: FishRarity.MYTHIC, price: 1950, supply: 5_000, volatility: 0.035, trend: 0.01, hasArt: true },
-  { symbol: 'MANTA', name: 'MANTA', rarity: FishRarity.MYTHIC, price: 2550, supply: 2_000, volatility: 0.028, trend: 0.012, hasArt: true },
-  { symbol: 'MWHALE', name: 'MEGA WHALE', rarity: FishRarity.MYTHIC, price: 3000, supply: 1_000, volatility: 0.02, trend: 0.008, hasArt: true },
+  { symbol: 'STING', name: 'STING', rarity: FishRarity.MYTHIC, price: 1950, supply: 5_000, volatility: 0.035, trend: 0.01, hasArt: true },
+  { symbol: 'MANTA', name: 'PHANTOM', rarity: FishRarity.MYTHIC, price: 2550, supply: 2_000, volatility: 0.028, trend: 0.012, hasArt: true },
+  { symbol: 'MWHALE', name: 'DEEP FEAR', rarity: FishRarity.MYTHIC, price: 3000, supply: 1_000, volatility: 0.02, trend: 0.008, hasArt: true },
 ];
 
 function fishImageUrl(symbol: string, hasArt?: boolean) {

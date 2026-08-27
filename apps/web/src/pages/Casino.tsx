@@ -64,7 +64,7 @@ function ReelCell({ item, won = false }: { item: CaseLootItem; won?: boolean }) 
       <div className="reel-cell-art">
         <img src={fishImage(item.symbol, item.imageUrl)} alt="" />
       </div>
-      <div className="reel-cell-sym">{item.symbol}</div>
+      <div className="reel-cell-sym">{fishName(item.symbol, item.name)}</div>
       <div className="reel-cell-price">{formatCredits(item.marketPrice)}</div>
     </div>
   );
@@ -311,7 +311,7 @@ export function Casino({
               <div className="case-top-drop">
                 <div className="label">Топ-дроп</div>
                 <div className={`value ${rarityClass(bestDrop.rarity)}`}>
-                  {bestDrop.symbol}
+                  {fishName(bestDrop.symbol, bestDrop.name)}
                 </div>
                 <div className="sub">
                   {formatCredits(bestDrop.marketPrice)} CR
@@ -362,10 +362,10 @@ export function Casino({
               </div>
               <div className="win-body">
                 <div className="win-rarity">{rarityLabel(reveal.rarity)}</div>
-                <div className="win-symbol">{reveal.symbol}</div>
-                <div className="win-name">
+                <div className="win-symbol">
                   {fishName(reveal.symbol, reveal.name)}
                 </div>
+                <div className="win-name">{reveal.symbol}</div>
                 <div className="win-stats">
                   <span>Стоимость {formatCredits(reveal.fishMarketValue)} CR</span>
                   <span className={pnlClass(reveal.profit ?? 0)}>

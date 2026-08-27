@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@rare-fish/db';
 import { PrismaService } from '../prisma/prisma.service';
+import { fishDisplayName } from '../fish/fish-names';
 
 @Injectable()
 export class PortfolioService {
@@ -34,7 +35,7 @@ export class PortfolioService {
       return {
         fishId: p.fishId,
         symbol: p.fish.symbol,
-        name: p.fish.name,
+        name: fishDisplayName(p.fish.symbol, p.fish.name),
         rarity: p.fish.rarity,
         imageUrl: p.fish.imageUrl || `/fish/${p.fish.symbol}.jpg`,
         quantity: p.quantity.toFixed(4),

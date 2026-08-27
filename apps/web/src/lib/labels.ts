@@ -16,9 +16,9 @@ const FISH_NAMES: Record<string, string> = {
   EPUFFER: 'WHALE',
   ASHARK: 'STINGY',
   BDRAGON: 'MONSTER',
-  STING: 'DEEP FEAR',
-  MANTA: 'MANTA',
-  MWHALE: 'MEGA WHALE',
+  STING: 'STING',
+  MANTA: 'PHANTOM',
+  MWHALE: 'DEEP FEAR',
 };
 
 const RARITY: Record<string, string> = {
