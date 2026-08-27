@@ -122,7 +122,9 @@ export default function App() {
           <PortfolioPage
             me={me}
             onSelectFish={setSelectedFishId}
-            onSold={refreshMe}
+            onSold={async () => {
+              await refreshMe();
+            }}
             notify={notify}
           />
         );
