@@ -24,6 +24,7 @@ import {
 import { hapticImpact, hapticNotify } from '../lib/telegram';
 
 const CASE_ART: Record<string, string> = {
+  DAILY: '/cases/TIDE.jpg',
   TIDE: '/cases/TIDE.jpg',
   REEF: '/cases/REEF.jpg',
   ABYSS: '/cases/ABYSS.jpg',
@@ -107,7 +108,22 @@ export function Casino({
 
   const selected = cases.find((c) => c.id === selectedId) || null;
   const balance = Number(me.balance);
-  const canAfford = !!selected && balance >= Number(selected.priceCredits);
+  const freeReady =
+    !selected?.isFreeDaily || selected.canOpenFree !== false;
+  const canAfford =
+    !!selected &&
+    freeReady &&
+    (selected.isFreeDaily || balance >= Number(selected.priceCredits));
+
+  function freeCountdown(iso: string | null | undefined) {
+    if (!iso) return null;
+    const ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0) return null;
+    const mins = Math.ceil(ms / 60_000);
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
+  }
 
   const clearTimers = useCallback(() => {
     timers.current.forEach((t) => clearTimeout(t));
@@ -183,8 +199,14 @@ export function Casino({
 
   async function openSelected() {
     if (!selected || busy) return;
+    if (selected.isFreeDaily && selected.canOpenFree === false) {
+      const left = freeCountdown(selected.nextFreeAt);
+      setError(left ? `Бесплатный кейс через ${left}` : 'Бесплатный кейс ещё недоступен');
+      void hapticNotify('error');
+      return;
+    }
     const cost = Number(selected.priceCredits);
-    if (balance < cost) {
+    if (!selected.isFreeDaily && balance < cost) {
       setError(
         `Нужно ${formatCredits(cost)} CR — пополните баланс или продайте рыбу`,
       );
@@ -282,12 +304,19 @@ export function Casino({
 
       <div className="case-rail">
         {cases.map((c, i) => {
-          const affordable = balance >= Number(c.priceCredits);
+          const freeLocked = c.isFreeDaily && c.canOpenFree === false;
+          const affordable =
+            c.isFreeDaily
+              ? !freeLocked
+              : balance >= Number(c.priceCredits);
+          const wait = freeLocked ? freeCountdown(c.nextFreeAt) : null;
           return (
             <button
               key={c.id}
               type="button"
-              className={`case-tile tier-${i} ${selectedId === c.id ? 'active' : ''} ${
+              className={`case-tile ${
+                c.isFreeDaily ? 'tier-free' : `tier-${Math.min(i, 3)}`
+              } ${selectedId === c.id ? 'active' : ''} ${
                 affordable ? '' : 'locked'
               }`}
               onClick={(e) => selectCase(c.id, e.currentTarget)}
@@ -303,7 +332,11 @@ export function Casino({
               </div>
               <div className="case-tile-name">{caseName(c.code, c.name)}</div>
               <div className="case-tile-price">
-                {formatCredits(c.priceCredits)} CR
+                {c.isFreeDaily
+                  ? wait
+                    ? `через ${wait}`
+                    : 'Бесплатно'
+                  : `${formatCredits(c.priceCredits)} CR`}
               </div>
             </button>
           );
@@ -400,11 +433,17 @@ export function Casino({
           >
             {busy
               ? 'Крутим…'
-              : !canAfford
-                ? `Нужно ещё ${formatCredits(Number(selected.priceCredits) - balance)} CR`
-                : reveal
-                  ? `Открыть ещё · ${formatCredits(selected.priceCredits)} CR`
-                  : `Открыть кейс · ${formatCredits(selected.priceCredits)} CR`}
+              : selected.isFreeDaily && selected.canOpenFree === false
+                ? `Через ${freeCountdown(selected.nextFreeAt) || '…'}`
+                : !canAfford
+                  ? `Нужно ещё ${formatCredits(Number(selected.priceCredits) - balance)} CR`
+                  : reveal
+                    ? selected.isFreeDaily
+                      ? 'Открыто · следующий через 24 ч'
+                      : `Открыть ещё · ${formatCredits(selected.priceCredits)} CR`
+                    : selected.isFreeDaily
+                      ? 'Открыть бесплатно'
+                      : `Открыть кейс · ${formatCredits(selected.priceCredits)} CR`}
           </button>
 
           <div className="case-footer">
@@ -424,8 +463,9 @@ export function Casino({
               Шансы
             </button>
             <span className="case-edge">
-              EV {formatCredits(selected.expectedValue)} · маржа{' '}
-              {selected.houseEdgePercent}%
+              {selected.isFreeDaily
+                ? 'Бесплатно · 1 раз / 24 ч'
+                : `EV ${formatCredits(selected.expectedValue)} · маржа ${selected.houseEdgePercent}%`}
             </span>
           </div>
 

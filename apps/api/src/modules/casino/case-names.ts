@@ -1,4 +1,9 @@
 const CASE_DISPLAY: Record<string, { name: string; description: string }> = {
+  DAILY: {
+    name: 'Ежедневный ящик',
+    description:
+      'Бесплатно раз в 24 часа. В основном дешёвая рыба, эпики — редкий джекпот.',
+  },
   TIDE: {
     name: 'Приливной ящик',
     description: 'Мелководье. Дешёвые открытия, в основном обычная наживка.',

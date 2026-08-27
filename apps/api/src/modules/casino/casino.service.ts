@@ -38,6 +38,11 @@ type RewardRow = {
 
 /** Tolerance for the price the client last saw, so a mid-roll tick is not fatal. */
 const PRICE_SLIPPAGE = 1.08;
+const FREE_DAILY_MS = 24 * 60 * 60 * 1000;
+
+function isFreeDailyCase(code: string) {
+  return code.toUpperCase() === 'DAILY';
+}
 
 @Injectable()
 export class CasinoService {
@@ -46,7 +51,7 @@ export class CasinoService {
     private readonly ledger: LedgerService,
   ) {}
 
-  async listCases() {
+  async listCases(userId?: string) {
     const cases = await this.prisma.db.lootCase.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: 'asc' },
@@ -68,7 +73,21 @@ export class CasinoService {
         },
       },
     });
-    return cases.map((c) => this.serializeCase(c));
+
+    let lastDailyAt: Date | null = null;
+    if (userId) {
+      const daily = cases.find((c) => isFreeDailyCase(c.code));
+      if (daily) {
+        const last = await this.prisma.db.caseOpening.findFirst({
+          where: { userId, caseId: daily.id },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+        lastDailyAt = last?.createdAt ?? null;
+      }
+    }
+
+    return cases.map((c) => this.serializeCase(c, lastDailyAt));
   }
 
   async getCase(caseId: string) {
@@ -189,6 +208,28 @@ export class CasinoService {
           throw new BadRequestException('Case has no rewards configured');
         }
 
+        const freeDaily = isFreeDailyCase(crate.code);
+        if (freeDaily) {
+          const last = await tx.caseOpening.findFirst({
+            where: { userId, caseId: crate.id },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true },
+          });
+          if (last) {
+            const nextAt = last.createdAt.getTime() + FREE_DAILY_MS;
+            if (Date.now() < nextAt) {
+              const mins = Math.ceil((nextAt - Date.now()) / 60_000);
+              const hours = Math.floor(mins / 60);
+              const rem = mins % 60;
+              throw new BadRequestException(
+                hours > 0
+                  ? `Бесплатный кейс через ${hours} ч ${rem} мин`
+                  : `Бесплатный кейс через ${mins} мин`,
+              );
+            }
+          }
+        }
+
         const available = crate.rewards.filter(
           (r) => r.fish.availableSupply >= r.quantity,
         ) as RewardRow[];
@@ -198,12 +239,18 @@ export class CasinoService {
           );
         }
 
-        const pricePaid = this.ticketPrice(
-          this.expectedValue(available),
-          crate.edgePercent,
-          crate.priceCredits,
-        );
-        if (maxPrice !== undefined && Number(pricePaid) > maxPrice * PRICE_SLIPPAGE) {
+        const pricePaid = freeDaily
+          ? new Prisma.Decimal(0)
+          : this.ticketPrice(
+              this.expectedValue(available),
+              crate.edgePercent,
+              crate.priceCredits,
+            );
+        if (
+          !freeDaily &&
+          maxPrice !== undefined &&
+          Number(pricePaid) > maxPrice * PRICE_SLIPPAGE
+        ) {
           throw new BadRequestException(
             'Case price moved — refresh and try again',
           );
@@ -224,19 +271,21 @@ export class CasinoService {
           );
         }
 
-        await this.ledger.debitInTransaction(tx, {
-          userId,
-          type: 'CASE_OPEN',
-          amount: pricePaid,
-          idempotencyKey: `ledger:${key}`,
-          referenceType: 'case_opening',
-          metadata: {
-            caseId: crate.id,
-            caseCode: crate.code,
-            fishId: picked.fishId,
-            quantity: qty,
-          },
-        });
+        if (!freeDaily) {
+          await this.ledger.debitInTransaction(tx, {
+            userId,
+            type: 'CASE_OPEN',
+            amount: pricePaid,
+            idempotencyKey: `ledger:${key}`,
+            referenceType: 'case_opening',
+            metadata: {
+              caseId: crate.id,
+              caseCode: crate.code,
+              fishId: picked.fishId,
+              quantity: qty,
+            },
+          });
+        }
 
         const position = await tx.portfolioPosition.findUnique({
           where: { userId_fishId: { userId, fishId: picked.fishId } },
@@ -373,38 +422,40 @@ export class CasinoService {
     return rewards[rewards.length - 1];
   }
 
-  private serializeCase(c: {
-    id: string;
-    code: string;
-    name: string;
-    description: string | null;
-    priceCredits: Prisma.Decimal;
-    edgePercent: Prisma.Decimal;
-    sortOrder: number;
-    rewards: Array<{
-      weight: number;
-      quantity: number;
-      fish: {
-        id: string;
-        symbol: string;
-        name: string;
-        rarity: string;
-        currentPrice: Prisma.Decimal;
-        availableSupply: number;
-        imageUrl: string | null;
-      };
-    }>;
-  }) {
+  private serializeCase(
+    c: {
+      id: string;
+      code: string;
+      name: string;
+      description: string | null;
+      priceCredits: Prisma.Decimal;
+      edgePercent: Prisma.Decimal;
+      sortOrder: number;
+      rewards: Array<{
+        weight: number;
+        quantity: number;
+        fish: {
+          id: string;
+          symbol: string;
+          name: string;
+          rarity: string;
+          currentPrice: Prisma.Decimal;
+          availableSupply: number;
+          imageUrl: string | null;
+        };
+      }>;
+    },
+    lastDailyAt: Date | null = null,
+  ) {
+    const freeDaily = isFreeDailyCase(c.code);
     const droppable = c.rewards.filter(
       (r) => r.fish.availableSupply >= r.quantity,
     );
     const totalWeight = droppable.reduce((s, r) => s + r.weight, 0);
     const expectedValue = this.expectedValue(droppable);
-    const priceCredits = this.ticketPrice(
-      expectedValue,
-      c.edgePercent,
-      c.priceCredits,
-    );
+    const priceCredits = freeDaily
+      ? new Prisma.Decimal(0)
+      : this.ticketPrice(expectedValue, c.edgePercent, c.priceCredits);
 
     const loot = c.rewards
       .map((r) => {
@@ -427,6 +478,17 @@ export class CasinoService {
 
     const price = Number(priceCredits);
     const ev = Number(expectedValue);
+
+    let canOpenFree = true;
+    let nextFreeAt: string | null = null;
+    if (freeDaily && lastDailyAt) {
+      const next = lastDailyAt.getTime() + FREE_DAILY_MS;
+      if (Date.now() < next) {
+        canOpenFree = false;
+        nextFreeAt = new Date(next).toISOString();
+      }
+    }
+
     return {
       id: c.id,
       code: c.code,
@@ -437,6 +499,9 @@ export class CasinoService {
       expectedValue: expectedValue.toFixed(4),
       houseEdgePercent:
         price > 0 ? Number((((price - ev) / price) * 100).toFixed(1)) : 0,
+      isFreeDaily: freeDaily,
+      canOpenFree: freeDaily ? canOpenFree : true,
+      nextFreeAt: freeDaily ? nextFreeAt : null,
       loot,
     };
   }

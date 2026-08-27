@@ -30,6 +30,7 @@ const RARITY: Record<string, string> = {
 };
 
 const CASE_NAMES: Record<string, string> = {
+  DAILY: 'Ежедневный ящик',
   TIDE: 'Приливной ящик',
   REEF: 'Рифовый сундук',
   ABYSS: 'Бездна-хранилище',
@@ -37,6 +38,8 @@ const CASE_NAMES: Record<string, string> = {
 };
 
 const CASE_DESC: Record<string, string> = {
+  DAILY:
+    'Бесплатно раз в 24 часа. В основном дешёвая рыба, эпики — редкий джекпот.',
   TIDE: 'Мелководье. Дешёвые открытия, в основном обычная наживка.',
   REEF: 'Коралловая полка. Редкие и первые эпики.',
   ABYSS: 'Зона давления. Эпики почти гарантированы, легендарки рядом.',
@@ -63,6 +66,7 @@ const ERROR_MAP: Array<[RegExp | string, string]> = [
   ['Deposit failed', 'Депозит не удался'],
   ['Open failed', 'Не удалось открыть'],
   ['Trade failed', 'Сделка не удалась'],
+  ['All fish in this case are sold out', 'В этом кейсе всё распродано'],
   ['Account is banned', 'Аккаунт заблокирован'],
   ['Unauthorized', 'Нет доступа'],
   ['Forbidden', 'Доступ запрещён'],

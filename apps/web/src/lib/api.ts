@@ -158,6 +158,9 @@ export type LootCase = {
   sortOrder: number;
   expectedValue: string;
   houseEdgePercent: number;
+  isFreeDaily?: boolean;
+  canOpenFree?: boolean;
+  nextFreeAt?: string | null;
   loot: CaseLootItem[];
 };
 

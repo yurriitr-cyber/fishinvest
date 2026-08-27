@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { InitData } from '@telegram-apps/init-data-node';
 import { TmaAuthGuard } from '../auth/tma-auth.guard';
 import { TelegramInitData } from '../auth/telegram-init-data.decorator';
@@ -14,7 +14,7 @@ class OpenCaseDto {
   /** Price the client displayed — guards against paying more after a price tick. */
   @IsOptional()
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   maxPrice?: number;
 }
 
@@ -27,8 +27,9 @@ export class CasinoController {
   ) {}
 
   @Get('cases')
-  list() {
-    return this.casino.listCases();
+  async list(@TelegramInitData() initData: InitData) {
+    const { user } = await this.users.getOrCreateFromInitData(initData);
+    return this.casino.listCases(user.id);
   }
 
   @Get('cases/:id')

@@ -163,6 +163,28 @@ async function main() {
     rewards: Array<{ symbol: string; weight: number }>;
   }> = [
     {
+      code: 'DAILY',
+      name: 'Daily Crate',
+      description:
+        'Free once per 24h. Mostly cheap fish, a couple of rare epic chase drops.',
+      priceCredits: 0,
+      edgePercent: 0,
+      sortOrder: -1,
+      rewards: [
+        { symbol: 'GLDFSH', weight: 520 },
+        { symbol: 'NEON', weight: 380 },
+        { symbol: 'CATFSH', weight: 240 },
+        { symbol: 'CLOWN', weight: 90 },
+        { symbol: 'HORSE', weight: 45 },
+        { symbol: 'DGUPPY', weight: 28 },
+        { symbol: 'PIRANA', weight: 16 },
+        // 3 epics — tiny chase odds (~1% combined)
+        { symbol: 'CBETTA', weight: 6 },
+        { symbol: 'BARRA', weight: 4 },
+        { symbol: 'QKOI', weight: 2 },
+      ],
+    },
+    {
       code: 'TIDE',
       name: 'Tide Crate',
       description: 'Shallow waters. Cheap opens, mostly common bait fish.',
