@@ -141,8 +141,87 @@ const server = http.createServer((req, res) => {
     proxyApi(req, res);
     return;
   }
+  if (serveInviteLanding(req, res)) {
+    return;
+  }
   serveStatic(req, res);
 });
+
+/**
+ * Share landing for referral links. Telegram (and others) crawl this HTML for
+ * Open Graph preview — so the invite banner shows next to the link.
+ */
+function serveInviteLanding(req, res) {
+  const pathOnly = (req.url || '/').split('?')[0];
+  const match = pathOnly.match(/^\/invite\/([A-Za-z0-9_-]+)\/?$/);
+  if (!match) return false;
+
+  const code = match[1];
+  const bot = (
+    process.env.TELEGRAM_BOT_USERNAME || 'rarefishinvestment_bot'
+  ).replace(/^@/, '');
+  const host =
+    String(req.headers['x-forwarded-host'] || req.headers.host || '')
+      .split(',')[0]
+      .trim() || 'localhost';
+  const proto = String(
+    req.headers['x-forwarded-proto'] ||
+      (host.includes('localhost') ? 'http' : 'https'),
+  )
+    .split(',')[0]
+    .trim();
+  const origin = `${proto}://${host}`;
+  const tgUrl = `https://t.me/${bot}?start=${encodeURIComponent(`ref_${code}`)}`;
+  const imageUrl = `${origin}/og/invite.jpg?v=1`;
+  const title = 'Rare Fish — коллекционируй редких рыб со мной';
+  const description = 'Получай 50 CR по моей ссылке!';
+
+  const html = `<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <meta name="description" content="${description}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Rare Fish" />
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${description}" />
+  <meta property="og:url" content="${origin}/invite/${code}" />
+  <meta property="og:image" content="${imageUrl}" />
+  <meta property="og:image:secure_url" content="${imageUrl}" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="1024" />
+  <meta property="og:image:height" content="481" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${title}" />
+  <meta name="twitter:description" content="${description}" />
+  <meta name="twitter:image" content="${imageUrl}" />
+  <meta http-equiv="refresh" content="0;url=${tgUrl}" />
+  <style>
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+      font-family:system-ui,sans-serif;background:#04121f;color:#e9f5fb;padding:24px;text-align:center}
+    a{color:#46d6e6;font-weight:700;font-size:1.1rem}
+    img{max-width:min(100%,520px);border-radius:16px;margin:16px 0}
+  </style>
+</head>
+<body>
+  <div>
+    <img src="${imageUrl}" alt="Rare Fish invite" width="1024" height="481" />
+    <p>Открываем Rare Fish…</p>
+    <p><a href="${tgUrl}">Открыть в Telegram</a></p>
+  </div>
+  <script>location.replace(${JSON.stringify(tgUrl)});</script>
+</body>
+</html>`;
+
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'public, max-age=300',
+  });
+  res.end(html);
+  return true;
+}
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`Mini App listening on :${port}`);

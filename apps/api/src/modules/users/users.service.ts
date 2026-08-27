@@ -276,8 +276,16 @@ export class UsersService {
     }
   }
 
-  /** Bot deep-link — always lands on /start with the payload; short-name apps are optional. */
+  /** Prefer https Mini App invite page (OG banner preview). Fallback: bot deep-link. */
   private buildReferralLink(referralCode: string): string {
+    const web = (
+      this.config.get<string>('WEBAPP_URL') ||
+      this.config.get<string>('PUBLIC_WEB_URL') ||
+      ''
+    ).replace(/\/$/, '');
+    if (web.startsWith('https://')) {
+      return `${web}/invite/${referralCode}`;
+    }
     const botUsername =
       this.config.get<string>('TELEGRAM_BOT_USERNAME')?.replace(/^@/, '') ??
       'rarefishinvestment_bot';

@@ -27,20 +27,29 @@ export function Referrals({
   }, []);
 
   async function copyLink() {
+    const link = inviteUrl();
     try {
-      await navigator.clipboard.writeText(me.referralLink);
+      await navigator.clipboard.writeText(link);
       void hapticImpact('light');
       notify('Ссылка скопирована');
     } catch {
-      notify(me.referralLink);
+      notify(link);
     }
+  }
+
+  function inviteUrl() {
+    // Same-origin invite page carries the OG banner Telegram shows in previews.
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}/invite/${me.referralCode}`;
+    }
+    return me.referralLink;
   }
 
   function shareLink() {
     const text = encodeURIComponent(
-      'Заходи в Rare Fish — нам обоим начислят бонусные кредиты.',
+      'Коллекционируй редких рыб со мной — получи 50 CR по моей ссылке!',
     );
-    const url = encodeURIComponent(me.referralLink);
+    const url = encodeURIComponent(inviteUrl());
     const shareUrl = `https://t.me/share/url?url=${url}&text=${text}`;
     void hapticImpact('light');
     window.open(shareUrl, '_blank', 'noopener,noreferrer');
@@ -80,7 +89,7 @@ export function Referrals({
             lineHeight: 1.4,
           }}
         >
-          {me.referralLink}
+          {inviteUrl()}
         </div>
         <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
           Друг открывает ссылку → жмёт «Открыть» в боте → бонусы начисляются
