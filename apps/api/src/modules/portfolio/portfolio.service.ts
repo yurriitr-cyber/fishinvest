@@ -36,7 +36,7 @@ export class PortfolioService {
         symbol: p.fish.symbol,
         name: p.fish.name,
         rarity: p.fish.rarity,
-        imageUrl: p.fish.imageUrl,
+        imageUrl: p.fish.imageUrl || `/fish/${p.fish.symbol}.jpg`,
         quantity: p.quantity.toFixed(4),
         avgBuyPrice: p.avgBuyPrice.toFixed(4),
         currentPrice: p.fish.currentPrice.toFixed(4),

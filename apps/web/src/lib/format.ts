@@ -47,3 +47,9 @@ export function fishGlyph(symbol: string) {
   if (s.length <= 3) return s;
   return s.slice(0, 2);
 }
+
+/** Static art lives at /fish/<SYMBOL>.jpg on the Mini App host. */
+export function fishImage(symbol: string, imageUrl?: string | null) {
+  if (imageUrl) return imageUrl;
+  return `/fish/${symbol.toUpperCase()}.jpg`;
+}

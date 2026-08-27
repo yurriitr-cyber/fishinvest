@@ -1,8 +1,7 @@
 import { BannerCarousel } from '../components/BannerCarousel';
-import { MediaSlot } from '../components/MediaSlot';
 import { api, type Fish, type Me } from '../lib/api';
 import {
-  fishGlyph,
+  fishImage,
   formatPct,
   formatStars,
   formatSupply,
@@ -104,11 +103,11 @@ export function Market({
               type="button"
               onClick={() => onSelectFish(f.id)}
             >
-              {f.imageUrl ? (
-                <img className="glyph" src={f.imageUrl} alt="" />
-              ) : (
-                <MediaSlot className="thumb" label={fishGlyph(f.symbol)} />
-              )}
+              <img
+                className="glyph"
+                src={fishImage(f.symbol, f.imageUrl)}
+                alt=""
+              />
               <div className="row-main">
                 <div className="name">{f.symbol}</div>
                 <div className="meta">

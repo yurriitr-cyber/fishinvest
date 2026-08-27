@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MediaSlot } from '../components/MediaSlot';
 import { PriceChart } from '../components/PriceChart';
 import { api, type Fish } from '../lib/api';
 import {
-  fishGlyph,
+  fishImage,
   formatPct,
   formatStars,
   formatSupply,
@@ -167,16 +166,12 @@ export function Trade({
         <>
           <div className="topbar">
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              {fish.imageUrl ? (
-                <img
-                  className="glyph"
-                  src={fish.imageUrl}
-                  alt=""
-                  style={{ width: 48, height: 48, borderRadius: 12 }}
-                />
-              ) : (
-                <MediaSlot className="thumb" label={fishGlyph(fish.symbol)} />
-              )}
+              <img
+                className="glyph"
+                src={fishImage(fish.symbol, fish.imageUrl)}
+                alt=""
+                style={{ width: 48, height: 48, borderRadius: 12 }}
+              />
               <div>
                 <div className="eyebrow">{rarityLabel(fish.rarity)}</div>
                 <h1>{fish.symbol}</h1>

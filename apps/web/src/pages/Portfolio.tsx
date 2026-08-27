@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api, type Me, type Portfolio } from '../lib/api';
-import { MediaSlot } from '../components/MediaSlot';
-import { fishGlyph, formatPct, formatStars, pnlClass } from '../lib/format';
+import {
+  fishImage,
+  formatPct,
+  formatStars,
+  pnlClass,
+} from '../lib/format';
 import { hapticImpact, hapticNotify } from '../lib/telegram';
 import { translateError } from '../lib/labels';
 
@@ -166,11 +170,11 @@ export function PortfolioPage({
                 type="button"
                 onClick={() => onSelectFish(p.fishId)}
               >
-                {p.imageUrl ? (
-                  <img className="glyph" src={p.imageUrl} alt="" />
-                ) : (
-                  <MediaSlot className="thumb" label={fishGlyph(p.symbol)} />
-                )}
+                <img
+                  className="glyph"
+                  src={fishImage(p.symbol, p.imageUrl)}
+                  alt=""
+                />
                 <div className="row-main">
                   <div className="name">{p.symbol}</div>
                   <div className="meta">

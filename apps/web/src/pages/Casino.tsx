@@ -14,7 +14,7 @@ import {
   type LootCase,
   type Me,
 } from '../lib/api';
-import { fishGlyph, formatCredits, pnlClass } from '../lib/format';
+import { fishImage, formatCredits, pnlClass } from '../lib/format';
 import {
   caseDesc,
   caseName,
@@ -62,11 +62,7 @@ function ReelCell({ item, won = false }: { item: CaseLootItem; won?: boolean }) 
   return (
     <div className={`reel-cell ${rarityClass(item.rarity)} ${won ? 'won' : ''}`}>
       <div className="reel-cell-art">
-        {item.imageUrl ? (
-          <img src={item.imageUrl} alt="" />
-        ) : (
-          <MediaSlot className="cell" label={fishGlyph(item.symbol)} />
-        )}
+        <img src={fishImage(item.symbol, item.imageUrl)} alt="" />
       </div>
       <div className="reel-cell-sym">{item.symbol}</div>
       <div className="reel-cell-price">{formatCredits(item.marketPrice)}</div>
@@ -362,11 +358,7 @@ export function Casino({
             <div className={`win-card ${rarityClass(reveal.rarity)}`}>
               <span className="win-glow" aria-hidden />
               <div className="win-art">
-                {reveal.imageUrl ? (
-                  <img src={reveal.imageUrl} alt="" />
-                ) : (
-                  <MediaSlot className="win" label={fishGlyph(reveal.symbol)} />
-                )}
+                <img src={fishImage(reveal.symbol, reveal.imageUrl)} alt="" />
               </div>
               <div className="win-body">
                 <div className="win-rarity">{rarityLabel(reveal.rarity)}</div>
@@ -432,11 +424,7 @@ export function Casino({
                   }`}
                 >
                   <div className="loot-art">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt="" />
-                    ) : (
-                      <MediaSlot className="thumb" label={fishGlyph(item.symbol)} />
-                    )}
+                    <img src={fishImage(item.symbol, item.imageUrl)} alt="" />
                   </div>
                   <div className="row-main">
                     <div className="name">{item.symbol}</div>
@@ -475,11 +463,11 @@ export function Casino({
             className={`row loot-history ${rarityClass(o.rarity)}`}
             style={{ cursor: 'default' }}
           >
-            {o.imageUrl ? (
-              <img className="glyph" src={o.imageUrl} alt="" />
-            ) : (
-              <MediaSlot className="thumb" label={fishGlyph(o.symbol)} />
-            )}
+            <img
+              className="glyph"
+              src={fishImage(o.symbol, o.imageUrl)}
+              alt=""
+            />
             <div className="row-main">
               <div className="name">{fishName(o.symbol, o.name)}</div>
               <div className="meta">

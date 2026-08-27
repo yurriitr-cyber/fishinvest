@@ -86,7 +86,7 @@ export class FishService {
       totalSupply: f.totalSupply,
       availableSupply: f.availableSupply,
       isFrozen: f.isFrozen,
-      imageUrl: f.imageUrl,
+      imageUrl: f.imageUrl || `/fish/${f.symbol}.jpg`,
       sortOrder: f.sortOrder,
     };
   }

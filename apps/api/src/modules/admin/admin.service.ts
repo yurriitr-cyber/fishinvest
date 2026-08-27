@@ -222,6 +222,12 @@ export class AdminService {
         minPrice: data.minPrice != null ? Number(data.minPrice) : undefined,
         maxPrice: data.maxPrice != null ? Number(data.maxPrice) : undefined,
         sortOrder: data.sortOrder != null ? Number(data.sortOrder) : undefined,
+        imageUrl:
+          data.imageUrl === null
+            ? null
+            : data.imageUrl != null
+              ? String(data.imageUrl)
+              : undefined,
       },
     });
     await this.log(admin.id, 'UPDATE_FISH', 'fish', id, before, after);
