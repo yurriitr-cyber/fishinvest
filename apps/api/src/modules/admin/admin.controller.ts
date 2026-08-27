@@ -69,6 +69,12 @@ class SetBalanceDto {
   @IsString() reason!: string;
 }
 
+class GiftFishDto {
+  @IsUUID() fishId!: string;
+  @IsNumber() @Min(0.0001) quantity!: number;
+  @IsString() reason!: string;
+}
+
 class BanDto {
   @IsOptional() @IsString() reason?: string;
 }
@@ -217,6 +223,15 @@ export class AdminController {
     @Body() dto: SetBalanceDto,
   ): Promise<any> {
     return this.admin.setBalance(admin, id, dto.balance, dto.reason);
+  }
+
+  @Post('users/:id/gift-fish')
+  giftFish(
+    @AdminUser() admin: User,
+    @Param('id') id: string,
+    @Body() dto: GiftFishDto,
+  ): Promise<any> {
+    return this.admin.giftFish(admin, id, dto.fishId, dto.quantity, dto.reason);
   }
 
   @Post('users/:id/ban')

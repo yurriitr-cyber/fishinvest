@@ -320,12 +320,12 @@ button {
   font-weight: 650;
 }
 
-.stat .value {
-  margin-top: 6px;
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.stat .value.ok {
+  color: var(--up);
+}
+
+.stat .value.down {
+  color: var(--down);
 }
 
 .row {
@@ -615,6 +615,10 @@ textarea:focus {
   margin-top: 10px;
   max-height: 220px;
   overflow: auto;
+}
+
+.list-compact.tall {
+  max-height: 300px;
 }
 
 .list-compact .item {

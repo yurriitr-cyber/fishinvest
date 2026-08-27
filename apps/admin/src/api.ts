@@ -155,6 +155,11 @@ export const adminApi = {
     }),
   unban: (id: string) =>
     request(`/admin/users/${id}/unban`, { method: 'POST', body: '{}' }),
+  giftFish: (id: string, fishId: string, quantity: number, reason: string) =>
+    request<AdminUserDetail>(`/admin/users/${id}/gift-fish`, {
+      method: 'POST',
+      body: JSON.stringify({ fishId, quantity, reason }),
+    }),
   audit: (limit = 60) => request<AuditItem[]>(`/admin/audit?limit=${limit}`),
   events: () => request<MarketEvent[]>('/admin/events'),
   createEvent: (data: Record<string, unknown>) =>
@@ -237,25 +242,80 @@ export type AdminUser = {
 };
 
 export type AdminUserDetail = AdminUser & {
+  lastName?: string | null;
+  referralCode?: string;
+  referredBy?: {
+    id: string;
+    username: string | null;
+    firstName: string | null;
+    telegramId: string;
+  } | null;
+  stats?: {
+    cash: string;
+    portfolioValue: string;
+    netWorth: string;
+    invested: string;
+    unrealizedPnl: string;
+    realizedPnl: string;
+    depositsTotal: string;
+    depositsCount: number;
+    buyVolume: string;
+    sellVolume: string;
+    buyCount: number;
+    sellCount: number;
+    caseOpenings: number;
+    caseOpenings24h: number;
+    caseSpent: string;
+    caseWonValue: string;
+    casePnl: string;
+    referralsCount: number;
+    trades24h: number;
+  };
   ledgerEntries: Array<{
     type: string;
     amount: string | number;
+    balanceAfter?: string | number;
     createdAt: string;
   }>;
   deposits: Array<{
     id: string;
     provider: string;
     status: string;
+    assetAmount?: string | number;
     gameCreditAmount: string | number | null;
+    createdAt?: string;
   }>;
   portfolioPositions: Array<{
     quantity: string | number;
-    fish: { symbol: string; currentPrice: string | number };
+    avgBuyPrice?: string | number;
+    totalInvested?: string | number;
+    realizedPnl?: string | number;
+    marketValue?: string | number;
+    unrealizedPnl?: string | number;
+    fish: {
+      id?: string;
+      symbol: string;
+      name?: string;
+      rarity?: string;
+      currentPrice: string | number;
+    };
   }>;
   trades?: Array<{
     side?: string;
+    quantity?: string | number;
+    unitPrice?: string | number;
     totalAmount?: string | number;
     createdAt: string;
+    fish?: { symbol: string; name?: string };
+  }>;
+  openings?: Array<{
+    id: string;
+    quantity: number;
+    pricePaid: string;
+    fishMarketValue: string;
+    createdAt: string;
+    case: { code: string; name: string };
+    fish: { symbol: string; name: string };
   }>;
 };
 
@@ -295,6 +355,7 @@ export type CasinoStats = {
     id: string;
     code: string;
     name: string;
+    displayName?: string;
     priceCredits: string;
     edgePercent: string;
     isActive: boolean;

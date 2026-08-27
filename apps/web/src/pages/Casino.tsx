@@ -35,6 +35,13 @@ function caseArt(code: string) {
   return CASE_ART[code.toUpperCase()] || `/cases/${code.toUpperCase()}.jpg`;
 }
 
+/** Short label for tight case tiles — full name stays on market/portfolio. */
+function caseFishName(symbol: string, fallback?: string | null) {
+  if (symbol.toUpperCase() === 'CLOWN') return 'PORCUPINE';
+  const name = fishName(symbol, fallback);
+  return name.toUpperCase() === 'PORCUPINEFISH' ? 'PORCUPINE' : name;
+}
+
 /** Reel geometry — cell + gap must match CSS. */
 const CELL = 88;
 const GAP = 10;
@@ -75,7 +82,7 @@ function ReelCell({ item, won = false }: { item: CaseLootItem; won?: boolean }) 
       <div className="reel-cell-art">
         <img src={fishImage(item.symbol, item.imageUrl)} alt="" />
       </div>
-      <div className="reel-cell-sym">{fishName(item.symbol, item.name)}</div>
+      <div className="reel-cell-sym">{caseFishName(item.symbol, item.name)}</div>
       <div className="reel-cell-price">{formatCredits(item.marketPrice)}</div>
     </div>
   );
@@ -194,7 +201,7 @@ export function Casino({
     const profit = Number(result.profit ?? 0);
     void hapticNotify(profit >= 0 ? 'success' : 'warning');
     notify(
-      `${fishName(result.symbol, result.name)} · ${formatCredits(result.fishMarketValue)} CR`,
+      `${caseFishName(result.symbol, result.name)} · ${formatCredits(result.fishMarketValue)} CR`,
     );
   }
 
@@ -359,7 +366,7 @@ export function Casino({
               <div className="case-top-drop">
                 <div className="label">Топ-дроп</div>
                 <div className={`value ${rarityClass(bestDrop.rarity)}`}>
-                  {fishName(bestDrop.symbol, bestDrop.name)}
+                  {caseFishName(bestDrop.symbol, bestDrop.name)}
                 </div>
                 <div className="sub">
                   {formatCredits(bestDrop.marketPrice)} CR
@@ -411,7 +418,7 @@ export function Casino({
               <div className="win-body">
                 <div className="win-rarity">Выпало</div>
                 <div className="win-symbol">
-                  {fishName(reveal.symbol, reveal.name)}
+                  {caseFishName(reveal.symbol, reveal.name)}
                 </div>
                 <div className="win-name">{rarityLabel(reveal.rarity)}</div>
                 <div className="win-stats">
@@ -482,7 +489,7 @@ export function Casino({
                     <img src={fishImage(item.symbol, item.imageUrl)} alt="" />
                   </div>
                   <div className="row-main">
-                    <div className="name">{fishName(item.symbol, item.name)}</div>
+                    <div className="name">{caseFishName(item.symbol, item.name)}</div>
                     <div className="meta">
                       {rarityLabel(item.rarity)} ·{' '}
                       {formatCredits(item.marketPrice)} CR
@@ -525,7 +532,7 @@ export function Casino({
               alt=""
             />
             <div className="row-main">
-              <div className="name">{fishName(o.symbol, o.name)}</div>
+              <div className="name">{caseFishName(o.symbol, o.name)}</div>
               <div className="meta">
                 {caseName(o.caseCode, o.caseName)} ·{' '}
                 {new Date(o.createdAt).toLocaleTimeString()}

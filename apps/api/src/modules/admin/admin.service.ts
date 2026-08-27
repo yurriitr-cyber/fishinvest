@@ -5,6 +5,8 @@ import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OracleService } from '../oracle/oracle.service';
 import { getAdminConfiguredSecret } from '../../security/security';
+import { fishDisplayName } from '../fish/fish-names';
+import { caseDisplayName } from '../casino/case-names';
 
 @Injectable()
 export class AdminService {
@@ -25,6 +27,8 @@ export class AdminService {
       tradesAgg,
       topFish,
       confirmedDeposits,
+      openings24h,
+      deposits24h,
     ] = await Promise.all([
       this.prisma.db.user.count(),
       this.prisma.db.user.count({ where: { lastSeenAt: { gte: since24h } } }),
@@ -50,6 +54,12 @@ export class AdminService {
           assetAmount: true,
           gameCreditAmount: true,
         },
+      }),
+      this.prisma.db.caseOpening.count({
+        where: { createdAt: { gte: since24h } },
+      }),
+      this.prisma.db.deposit.count({
+        where: { status: 'CONFIRMED', createdAt: { gte: since24h } },
       }),
     ]);
 
@@ -110,12 +120,14 @@ export class AdminService {
       topFish: topFish.map((f) => ({
         id: f.id,
         symbol: f.symbol,
-        name: f.name,
+        name: fishDisplayName(f.symbol, f.name),
         price: f.currentPrice.toFixed(4),
         change: f.dailyChangePercent.toFixed(4),
         frozen: f.isFrozen,
       })),
       topUsers,
+      openings24h,
+      depositsConfirmed24h: deposits24h,
     };
   }
 
@@ -145,7 +157,7 @@ export class AdminService {
       return {
         id: f.id,
         symbol: f.symbol,
-        name: f.name,
+        name: fishDisplayName(f.symbol, f.name),
         rarity: f.rarity,
         currentPrice: f.currentPrice.toFixed(4),
         previousPrice: f.previousPrice.toFixed(4),
@@ -550,41 +562,185 @@ export class AdminService {
       where: { id },
       include: {
         gameBalance: true,
-        portfolioPositions: { include: { fish: true } },
+        referredBy: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            telegramId: true,
+          },
+        },
+        portfolioPositions: {
+          include: { fish: true },
+          orderBy: { updatedAt: 'desc' },
+        },
         deposits: { orderBy: { createdAt: 'desc' }, take: 20 },
-        ledgerEntries: { orderBy: { createdAt: 'desc' }, take: 30 },
-        trades: { orderBy: { createdAt: 'desc' }, take: 20 },
+        ledgerEntries: { orderBy: { createdAt: 'desc' }, take: 40 },
+        trades: {
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+          include: { fish: { select: { symbol: true, name: true } } },
+        },
+        caseOpenings: {
+          orderBy: { createdAt: 'desc' },
+          take: 15,
+          include: {
+            fish: { select: { symbol: true, name: true } },
+            lootCase: { select: { code: true, name: true } },
+          },
+        },
       },
     });
     if (!user) throw new NotFoundException('User not found');
+
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [
+      depositSum,
+      openingsAgg,
+      openingsCount,
+      buyAgg,
+      sellAgg,
+      referralCount,
+      openings24h,
+      trades24h,
+    ] = await Promise.all([
+      this.prisma.db.deposit.aggregate({
+        where: { userId: id, status: 'CONFIRMED' },
+        _sum: { gameCreditAmount: true },
+        _count: true,
+      }),
+      this.prisma.db.caseOpening.aggregate({
+        where: { userId: id },
+        _sum: { pricePaid: true, fishMarketValue: true },
+      }),
+      this.prisma.db.caseOpening.count({ where: { userId: id } }),
+      this.prisma.db.trade.aggregate({
+        where: { userId: id, side: 'BUY' },
+        _sum: { totalAmount: true },
+        _count: true,
+      }),
+      this.prisma.db.trade.aggregate({
+        where: { userId: id, side: 'SELL' },
+        _sum: { totalAmount: true },
+        _count: true,
+      }),
+      this.prisma.db.referral.count({ where: { referrerId: id } }),
+      this.prisma.db.caseOpening.count({
+        where: { userId: id, createdAt: { gte: since24h } },
+      }),
+      this.prisma.db.trade.count({
+        where: { userId: id, createdAt: { gte: since24h } },
+      }),
+    ]);
+
+    let portfolioValue = new Prisma.Decimal(0);
+    let invested = new Prisma.Decimal(0);
+    let realizedPnl = new Prisma.Decimal(0);
+    const portfolioPositions = user.portfolioPositions.map((p) => {
+      const value = p.fish.currentPrice.mul(p.quantity);
+      portfolioValue = portfolioValue.add(value);
+      invested = invested.add(p.totalInvested);
+      realizedPnl = realizedPnl.add(p.realizedPnl);
+      return {
+        quantity: p.quantity.toFixed(4),
+        avgBuyPrice: p.avgBuyPrice.toFixed(4),
+        totalInvested: p.totalInvested.toFixed(4),
+        realizedPnl: p.realizedPnl.toFixed(4),
+        marketValue: value.toFixed(4),
+        unrealizedPnl: value.sub(p.totalInvested).toFixed(4),
+        fish: {
+          id: p.fish.id,
+          symbol: p.fish.symbol,
+          name: fishDisplayName(p.fish.symbol, p.fish.name),
+          rarity: p.fish.rarity,
+          currentPrice: p.fish.currentPrice.toFixed(4),
+        },
+      };
+    });
+
+    const cash = user.gameBalance?.available ?? new Prisma.Decimal(0);
+    const caseSpent = openingsAgg._sum.pricePaid ?? new Prisma.Decimal(0);
+    const caseWon = openingsAgg._sum.fishMarketValue ?? new Prisma.Decimal(0);
+
     return {
       ...this.serializeUserSummary(user),
       lastName: user.lastName,
       createdAt: user.createdAt.toISOString(),
       lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
       referralCode: user.referralCode,
-      portfolioPositions: user.portfolioPositions.map((p) => ({
-        quantity: p.quantity.toFixed(4),
-        fish: {
-          symbol: p.fish.symbol,
-          currentPrice: p.fish.currentPrice.toFixed(4),
-        },
-      })),
+      referredBy: user.referredBy
+        ? {
+            id: user.referredBy.id,
+            username: user.referredBy.username,
+            firstName: user.referredBy.firstName,
+            telegramId: user.referredBy.telegramId.toString(),
+          }
+        : null,
+      stats: {
+        cash: cash.toFixed(4),
+        portfolioValue: portfolioValue.toFixed(4),
+        netWorth: cash.add(portfolioValue).toFixed(4),
+        invested: invested.toFixed(4),
+        unrealizedPnl: portfolioValue.sub(invested).toFixed(4),
+        realizedPnl: realizedPnl.toFixed(4),
+        depositsTotal: (
+          depositSum._sum.gameCreditAmount ?? new Prisma.Decimal(0)
+        ).toFixed(4),
+        depositsCount: depositSum._count,
+        buyVolume: (buyAgg._sum.totalAmount ?? new Prisma.Decimal(0)).toFixed(4),
+        sellVolume: (sellAgg._sum.totalAmount ?? new Prisma.Decimal(0)).toFixed(
+          4,
+        ),
+        buyCount: buyAgg._count,
+        sellCount: sellAgg._count,
+        caseOpenings: openingsCount,
+        caseOpenings24h: openings24h,
+        caseSpent: caseSpent.toFixed(4),
+        caseWonValue: caseWon.toFixed(4),
+        casePnl: caseWon.sub(caseSpent).toFixed(4),
+        referralsCount: referralCount,
+        trades24h,
+      },
+      portfolioPositions,
       deposits: user.deposits.map((d) => ({
         id: d.id,
         provider: d.provider,
         status: d.status,
+        assetAmount: d.assetAmount.toFixed(4),
         gameCreditAmount: d.gameCreditAmount?.toFixed(4) ?? null,
+        createdAt: d.createdAt.toISOString(),
       })),
       ledgerEntries: user.ledgerEntries.map((e) => ({
         type: e.type,
         amount: e.amount.toFixed(4),
+        balanceAfter: e.balanceAfter.toFixed(4),
         createdAt: e.createdAt.toISOString(),
       })),
       trades: user.trades.map((t) => ({
         side: t.side,
+        quantity: t.quantity.toFixed(4),
+        unitPrice: t.unitPrice.toFixed(4),
         totalAmount: t.totalAmount.toFixed(4),
         createdAt: t.createdAt.toISOString(),
+        fish: {
+          symbol: t.fish.symbol,
+          name: fishDisplayName(t.fish.symbol, t.fish.name),
+        },
+      })),
+      openings: user.caseOpenings.map((o) => ({
+        id: o.id,
+        quantity: o.quantity,
+        pricePaid: o.pricePaid.toFixed(4),
+        fishMarketValue: o.fishMarketValue.toFixed(4),
+        createdAt: o.createdAt.toISOString(),
+        case: {
+          code: o.lootCase.code,
+          name: caseDisplayName(o.lootCase.code, o.lootCase.name),
+        },
+        fish: {
+          symbol: o.fish.symbol,
+          name: fishDisplayName(o.fish.symbol, o.fish.name),
+        },
       })),
     };
   }
@@ -708,6 +864,71 @@ export class AdminService {
     return this.getUser(userId);
   }
 
+  async giftFish(
+    admin: User,
+    userId: string,
+    fishId: string,
+    quantity: number,
+    reason: string,
+  ) {
+    if (!reason?.trim()) throw new BadRequestException('Reason required');
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new BadRequestException('Quantity must be positive');
+    }
+
+    const user = await this.prisma.db.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    const fish = await this.prisma.db.fish.findUnique({ where: { id: fishId } });
+    if (!fish) throw new NotFoundException('Fish not found');
+
+    const qty = new Prisma.Decimal(quantity);
+    const marketValue = fish.currentPrice.mul(qty);
+
+    await this.prisma.db.$transaction(async (tx) => {
+      const position = await tx.portfolioPosition.findUnique({
+        where: { userId_fishId: { userId, fishId } },
+      });
+      if (position) {
+        const newQty = position.quantity.add(qty);
+        await tx.portfolioPosition.update({
+          where: { id: position.id },
+          data: {
+            quantity: newQty,
+            avgBuyPrice: newQty.gt(0)
+              ? position.totalInvested.div(newQty)
+              : new Prisma.Decimal(0),
+          },
+        });
+      } else {
+        await tx.portfolioPosition.create({
+          data: {
+            userId,
+            fishId,
+            quantity: qty,
+            avgBuyPrice: new Prisma.Decimal(0),
+            totalInvested: new Prisma.Decimal(0),
+          },
+        });
+      }
+      const take = Math.max(0, Math.min(fish.availableSupply, Math.ceil(quantity)));
+      if (take > 0) {
+        await tx.fish.update({
+          where: { id: fishId },
+          data: { availableSupply: { decrement: take } },
+        });
+      }
+    });
+
+    await this.log(admin.id, 'GIFT_FISH', 'user', userId, null, {
+      fishId,
+      symbol: fish.symbol,
+      quantity,
+      marketValue: marketValue.toFixed(4),
+      reason,
+    });
+    return this.getUser(userId);
+  }
+
   async setBan(admin: User, userId: string, banned: boolean, reason?: string) {
     const before = await this.prisma.db.user.findUnique({ where: { id: userId } });
     if (!before) throw new NotFoundException('User not found');
@@ -753,13 +974,22 @@ export class AdminService {
   }
 
   async listEvents(limit = 30) {
-    return this.prisma.db.marketEvent.findMany({
+    const rows = await this.prisma.db.marketEvent.findMany({
       orderBy: { startTime: 'desc' },
       take: Math.min(limit, 100),
       include: {
         fish: { select: { id: true, symbol: true, name: true } },
       },
     });
+    return rows.map((ev) => ({
+      ...ev,
+      fish: ev.fish
+        ? {
+            ...ev.fish,
+            name: fishDisplayName(ev.fish.symbol, ev.fish.name),
+          }
+        : null,
+    }));
   }
 
   async setEventActive(admin: User, id: string, isActive: boolean) {
@@ -827,6 +1057,7 @@ export class AdminService {
         id: c.id,
         code: c.code,
         name: c.name,
+        displayName: caseDisplayName(c.code, c.name),
         priceCredits: c.priceCredits.toFixed(4),
         edgePercent: c.edgePercent.toFixed(2),
         isActive: c.isActive,
@@ -834,8 +1065,10 @@ export class AdminService {
       })),
       recent: recent.map((o) => ({
         id: o.id,
-        case: o.lootCase.name,
-        fish: o.fish.symbol,
+        case: caseDisplayName(o.lootCase.code, o.lootCase.name),
+        caseCode: o.lootCase.code,
+        fish: fishDisplayName(o.fish.symbol, o.fish.name),
+        fishSymbol: o.fish.symbol,
         paid: o.pricePaid.toFixed(4),
         value: o.fishMarketValue.toFixed(4),
         user: o.user.username || o.user.firstName || String(o.user.telegramId),

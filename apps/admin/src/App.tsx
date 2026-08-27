@@ -17,6 +17,7 @@ import {
   type Payment,
   type SecurityOverview,
 } from './api';
+import { caseName, fishName, ledgerLabel, rarityLabel } from './labels';
 
 type Tab =
   | 'dashboard'
@@ -56,6 +57,23 @@ function when(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function ago(iso?: string | null) {
+  if (!iso) return 'никогда';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return when(iso);
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return 'только что';
+  if (mins < 60) return `${mins} мин назад`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} ч назад`;
+  const days = Math.floor(hours / 24);
+  return `${days} дн. назад`;
+}
+
+function copyText(value: string) {
+  void navigator.clipboard?.writeText(value);
 }
 
 function Ocean() {
@@ -99,6 +117,11 @@ export default function App() {
   const [casino, setCasino] = useState<CasinoStats | null>(null);
   const [security, setSecurity] = useState<SecurityOverview | null>(null);
   const [q, setQ] = useState('');
+  const [userFilter, setUserFilter] = useState<'all' | 'banned' | 'active' | 'funded'>(
+    'all',
+  );
+  const [giftFishId, setGiftFishId] = useState('');
+  const [giftQty, setGiftQty] = useState('1');
 
   const [eventForm, setEventForm] = useState({
     name: '',
@@ -191,7 +214,10 @@ export default function App() {
             setTargets(next);
           }
         }
-        if (tab === 'users') await loadUsers();
+        if (tab === 'users') {
+          await loadUsers();
+          setFish(await adminApi.fish());
+        }
         if (tab === 'payments') {
           setPayments(await adminApi.paymentSettings());
           setOracle(await adminApi.oracles());
@@ -383,13 +409,23 @@ export default function App() {
                   <div className="label">Сделок</div>
                   <div className="value">{n(dash.tradesCount as number, 0)}</div>
                 </div>
+                <div className="stat">
+                  <div className="label">Кейсы 24ч</div>
+                  <div className="value">{n(dash.openings24h as number, 0)}</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Депозиты 24ч</div>
+                  <div className="value">
+                    {n(dash.depositsConfirmed24h as number, 0)}
+                  </div>
+                </div>
               </div>
               <div className="detail-grid">
                 <div className="panel">
                   <h2>Топ рыб</h2>
                   {((dash.topFish as Fish[]) || []).map((f) => (
                     <div key={f.id} className="row" style={{ gridTemplateColumns: '1fr 0.6fr 0.7fr 0.5fr' }}>
-                      <div>{f.name}</div>
+                      <div>{fishName(f.symbol, f.name)}</div>
                       <div className="mono muted">{f.symbol}</div>
                       <div className="mono">{n(f.currentPrice ?? f.price)}</div>
                       <div className={`mono ${Number(f.change ?? f.dailyChangePercent) >= 0 ? 'ok' : 'down'}`}>
@@ -456,8 +492,8 @@ export default function App() {
                 return (
                   <div key={f.id} className="row targets-grid">
                     <div>
-                      <strong>{f.symbol}</strong>
-                      <div className="muted">{f.name}</div>
+                      <strong>{fishName(f.symbol, f.name)}</strong>
+                      <div className="muted mono">{f.symbol}</div>
                     </div>
                     <div className="mono">
                       {n(f.currentPrice, 2)}
@@ -541,7 +577,7 @@ export default function App() {
               {fish.map((f) => (
                 <div key={f.id} className="row">
                   <div>
-                    {f.name}{' '}
+                    {fishName(f.symbol, f.name)}{' '}
                     <span className="muted mono">{f.symbol}</span>
                     {f.isFrozen ? (
                       <span className="badge badge-warn" style={{ marginLeft: 8 }}>
@@ -567,7 +603,7 @@ export default function App() {
                           window.prompt('Причина', 'ручная цена') || 'ручная цена';
                         await adminApi.setPrice(f.id, Number(raw), reason);
                         setFish(await adminApi.fish());
-                        setOkMsg(`Цена ${f.symbol} → ${raw}`);
+                        setOkMsg(`Цена ${fishName(f.symbol, f.name)} → ${raw}`);
                       }}
                     >
                       Цена
@@ -640,15 +676,46 @@ export default function App() {
                     Показать всех
                   </button>
                 ) : null}
+                {(
+                  [
+                    ['all', 'Все'],
+                    ['active', 'Активны 24ч'],
+                    ['funded', 'С балансом'],
+                    ['banned', 'Бан'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`btn btn-sm ${userFilter === id ? 'btn-primary' : ''}`}
+                    onClick={() => setUserFilter(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
               <div className="panel">
                 <div className="panel-head">
                   <div>
                     <h2>Все пользователи</h2>
                     <p className="muted">
-                      Показано {users.length}
-                      {usersTotal > users.length ? ` из ${usersTotal}` : ''} ·
-                      новые появляются автоматически
+                      Показано{' '}
+                      {
+                        users.filter((u) => {
+                          if (userFilter === 'banned') return u.status === 'BANNED';
+                          if (userFilter === 'funded')
+                            return Number(u.gameBalance?.available ?? 0) > 0;
+                          if (userFilter === 'active')
+                            return (
+                              !!u.lastSeenAt &&
+                              Date.now() - new Date(u.lastSeenAt).getTime() <
+                                86_400_000
+                            );
+                          return true;
+                        }).length
+                      }{' '}
+                      из {users.length}
+                      {usersTotal > users.length ? ` (всего ${usersTotal})` : ''}
                     </p>
                   </div>
                 </div>
@@ -658,7 +725,19 @@ export default function App() {
                   <div>Баланс</div>
                   <div>Действия</div>
                 </div>
-                {users.map((u) => (
+                {users
+                  .filter((u) => {
+                    if (userFilter === 'banned') return u.status === 'BANNED';
+                    if (userFilter === 'funded')
+                      return Number(u.gameBalance?.available ?? 0) > 0;
+                    if (userFilter === 'active')
+                      return (
+                        !!u.lastSeenAt &&
+                        Date.now() - new Date(u.lastSeenAt).getTime() < 86_400_000
+                      );
+                    return true;
+                  })
+                  .map((u) => (
                   <div key={u.id} className="row">
                     <div>
                       {u.username || u.firstName || 'User'}{' '}
@@ -672,13 +751,23 @@ export default function App() {
                           admin
                         </span>
                       ) : null}
-                      {u.createdAt ? (
-                        <div className="dim" style={{ fontSize: 11 }}>
-                          с {when(u.createdAt)}
-                        </div>
-                      ) : null}
+                      <div className="dim" style={{ fontSize: 11 }}>
+                        был {ago(u.lastSeenAt)}
+                        {u.createdAt ? ` · с ${when(u.createdAt)}` : ''}
+                      </div>
                     </div>
-                    <div className="mono">{String(u.telegramId)}</div>
+                    <div className="mono">
+                      {String(u.telegramId)}
+                      <div>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={() => copyText(String(u.telegramId))}
+                        >
+                          копировать
+                        </button>
+                      </div>
+                    </div>
                     <div className="mono">{n(u.gameBalance?.available)} CR</div>
                     <div className="actions">
                       <button
@@ -691,6 +780,8 @@ export default function App() {
                             String(Number(detail.gameBalance?.available ?? 0)),
                           );
                           setBalanceReason('пополнение админом');
+                          setGiftFishId(fish[0]?.id ?? '');
+                          setGiftQty('1');
                           setOkMsg(null);
                           setError(null);
                         }}
@@ -729,17 +820,109 @@ export default function App() {
 
               {selectedUser && (
                 <div className="panel">
-                  <h2>
-                    {selectedUser.username || selectedUser.firstName || '—'}
-                  </h2>
-                  <p className="muted" style={{ marginBottom: 12 }}>
-                    tg {String(selectedUser.telegramId)} · {selectedUser.status}
-                    {selectedUser.isAdmin ? ' · admin' : ''}
-                  </p>
-                  <div className="stat" style={{ marginBottom: 14, maxWidth: 240 }}>
-                    <div className="label">Баланс</div>
-                    <div className="value">
-                      {n(selectedUser.gameBalance?.available)} CR
+                  <div className="panel-head">
+                    <div>
+                      <h2>
+                        {selectedUser.username || selectedUser.firstName || '—'}
+                        {selectedUser.lastName ? ` ${selectedUser.lastName}` : ''}
+                      </h2>
+                      <p className="muted">
+                        tg {String(selectedUser.telegramId)} · {selectedUser.status}
+                        {selectedUser.isAdmin ? ' · admin' : ''} · был{' '}
+                        {ago(selectedUser.lastSeenAt)}
+                        {selectedUser.referralCode
+                          ? ` · реф. ${selectedUser.referralCode}`
+                          : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => copyText(String(selectedUser.telegramId))}
+                    >
+                      Копировать Telegram ID
+                    </button>
+                  </div>
+
+                  {selectedUser.referredBy ? (
+                    <p className="muted" style={{ marginTop: -6 }}>
+                      Пришёл от{' '}
+                      {selectedUser.referredBy.username ||
+                        selectedUser.referredBy.firstName ||
+                        selectedUser.referredBy.telegramId}
+                    </p>
+                  ) : null}
+
+                  <div className="grid-stats">
+                    <div className="stat">
+                      <div className="label">Кэш</div>
+                      <div className="value">
+                        {n(selectedUser.stats?.cash ?? selectedUser.gameBalance?.available)} CR
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Портфель</div>
+                      <div className="value">
+                        {n(selectedUser.stats?.portfolioValue)} CR
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Нетто</div>
+                      <div className="value">
+                        {n(selectedUser.stats?.netWorth)} CR
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Нереал. P&L</div>
+                      <div
+                        className={`value ${Number(selectedUser.stats?.unrealizedPnl ?? 0) >= 0 ? 'ok' : 'down'}`}
+                      >
+                        {n(selectedUser.stats?.unrealizedPnl)}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Реал. P&L</div>
+                      <div
+                        className={`value ${Number(selectedUser.stats?.realizedPnl ?? 0) >= 0 ? 'ok' : 'down'}`}
+                      >
+                        {n(selectedUser.stats?.realizedPnl)}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Депозиты</div>
+                      <div className="value">
+                        {n(selectedUser.stats?.depositsTotal)}{' '}
+                        <span className="muted" style={{ fontSize: 12 }}>
+                          ×{selectedUser.stats?.depositsCount ?? 0}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Покупки / продажи</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>
+                        {n(selectedUser.stats?.buyVolume)} / {n(selectedUser.stats?.sellVolume)}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Кейсы</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>
+                        {selectedUser.stats?.caseOpenings ?? 0} откр.
+                        <div className={`muted ${Number(selectedUser.stats?.casePnl ?? 0) >= 0 ? 'ok' : 'down'}`} style={{ fontSize: 12, marginTop: 4 }}>
+                          P&L {n(selectedUser.stats?.casePnl)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Рефералы</div>
+                      <div className="value">
+                        {n(selectedUser.stats?.referralsCount, 0)}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Активность 24ч</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>
+                        {selectedUser.stats?.trades24h ?? 0} сд. / {selectedUser.stats?.caseOpenings24h ?? 0} кейс.
+                      </div>
                     </div>
                   </div>
 
@@ -859,15 +1042,97 @@ export default function App() {
                     </button>
                   </div>
 
+                  <div className="toolbar">
+                    <label className="field">
+                      <span>Выдать рыбу</span>
+                      <select
+                        value={giftFishId}
+                        onChange={(e) => setGiftFishId(e.target.value)}
+                      >
+                        <option value="">Выберите рыбу</option>
+                        {fish.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {fishName(f.symbol, f.name)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Кол-во</span>
+                      <input
+                        type="number"
+                        min={0.0001}
+                        step="any"
+                        value={giftQty}
+                        onChange={(e) => setGiftQty(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy}
+                      onClick={async () => {
+                        const qty = Number(giftQty);
+                        if (!giftFishId) {
+                          setError('Выберите рыбу');
+                          return;
+                        }
+                        if (!Number.isFinite(qty) || qty <= 0) {
+                          setError('Количество должно быть > 0');
+                          return;
+                        }
+                        setBusy(true);
+                        setError(null);
+                        try {
+                          const updated = await adminApi.giftFish(
+                            selectedUser.id,
+                            giftFishId,
+                            qty,
+                            balanceReason.trim() || 'выдача рыбы',
+                          );
+                          setSelectedUser(updated);
+                          await loadUsers();
+                          const gifted = fish.find((f) => f.id === giftFishId);
+                          setOkMsg(
+                            `Выдано ${qty} × ${fishName(gifted?.symbol, gifted?.name)}`,
+                          );
+                        } catch (e) {
+                          setError(
+                            e instanceof Error ? e.message : 'Не удалось выдать',
+                          );
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Выдать
+                    </button>
+                  </div>
+
                   <div className="detail-grid" style={{ marginTop: 8 }}>
                     <div>
                       <h2 style={{ fontSize: '1rem' }}>Портфель</h2>
-                      <div className="list-compact">
+                      <div className="list-compact tall">
                         {(selectedUser.portfolioPositions || []).map((p, i) => (
                           <div key={i} className="item">
-                            <span>{p.fish.symbol}</span>
+                            <span>
+                              {fishName(p.fish.symbol, p.fish.name)}
+                              {p.fish.rarity ? (
+                                <span className="muted">
+                                  {' '}
+                                  · {rarityLabel(p.fish.rarity)}
+                                </span>
+                              ) : null}
+                              <div className="dim" style={{ fontSize: 11 }}>
+                                ср. {n(p.avgBuyPrice)} → рынок {n(p.fish.currentPrice)}
+                              </div>
+                            </span>
                             <span className="mono">
-                              ×{n(p.quantity, 4)} @ {n(p.fish.currentPrice)}
+                              ×{n(p.quantity, 4)}
+                              <div className={Number(p.unrealizedPnl ?? 0) >= 0 ? 'ok' : 'down'} style={{ fontSize: 11 }}>
+                                {n(p.marketValue)} · {Number(p.unrealizedPnl ?? 0) >= 0 ? '+' : ''}
+                                {n(p.unrealizedPnl)}
+                              </div>
                             </span>
                           </div>
                         ))}
@@ -877,16 +1142,67 @@ export default function App() {
                       </div>
                     </div>
                     <div>
-                      <h2 style={{ fontSize: '1rem' }}>Ledger</h2>
-                      <div className="list-compact">
-                        {(selectedUser.ledgerEntries || []).slice(0, 12).map((e, i) => (
+                      <h2 style={{ fontSize: '1rem' }}>Движение баланса</h2>
+                      <div className="list-compact tall">
+                        {(selectedUser.ledgerEntries || []).slice(0, 20).map((e, i) => (
                           <div key={i} className="item">
-                            <span>{e.type}</span>
+                            <span>{ledgerLabel(e.type)}</span>
                             <span className="mono">
-                              {n(e.amount)} · {when(e.createdAt)}
+                              {Number(e.amount) >= 0 ? '+' : ''}
+                              {n(e.amount)}
+                              <div className="dim" style={{ fontSize: 11 }}>
+                                {when(e.createdAt)}
+                                {e.balanceAfter != null
+                                  ? ` · после ${n(e.balanceAfter)}`
+                                  : ''}
+                              </div>
                             </span>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize: '1rem' }}>Сделки</h2>
+                      <div className="list-compact tall">
+                        {(selectedUser.trades || []).map((t, i) => (
+                          <div key={i} className="item">
+                            <span>
+                              {t.side === 'SELL' ? 'Продажа' : 'Покупка'}{' '}
+                              {fishName(t.fish?.symbol, t.fish?.name)}
+                            </span>
+                            <span className="mono">
+                              ×{n(t.quantity, 4)} · {n(t.totalAmount)}
+                              <div className="dim" style={{ fontSize: 11 }}>
+                                {when(t.createdAt)}
+                              </div>
+                            </span>
+                          </div>
+                        ))}
+                        {!selectedUser.trades?.length && (
+                          <div className="muted">Нет сделок</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize: '1rem' }}>Кейсы</h2>
+                      <div className="list-compact tall">
+                        {(selectedUser.openings || []).map((o) => (
+                          <div key={o.id} className="item">
+                            <span>
+                              {caseName(o.case.code, o.case.name)} →{' '}
+                              {fishName(o.fish.symbol, o.fish.name)}
+                            </span>
+                            <span className="mono">
+                              {n(o.fishMarketValue)}
+                              <div className="dim" style={{ fontSize: 11 }}>
+                                {when(o.createdAt)} · цена {n(o.pricePaid)}
+                              </div>
+                            </span>
+                          </div>
+                        ))}
+                        {!selectedUser.openings?.length && (
+                          <div className="muted">Не открывал</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1055,7 +1371,7 @@ export default function App() {
                       <option value="">Все</option>
                       {fish.map((f) => (
                         <option key={f.id} value={f.id}>
-                          {f.symbol}
+                          {fishName(f.symbol, f.name)}
                         </option>
                       ))}
                     </select>
@@ -1132,7 +1448,10 @@ export default function App() {
                         <span className="badge badge-warn">выкл</span>
                       )}
                       <div className="muted">
-                        {ev.fish?.symbol || 'все'} · ×{n(ev.priceMultiplier, 2)}
+                        {ev.fish
+                          ? fishName(ev.fish.symbol, ev.fish.name)
+                          : 'все'}{' '}
+                        · ×{n(ev.priceMultiplier, 2)}
                       </div>
                     </div>
                     <div className="muted" style={{ fontSize: 12 }}>
@@ -1186,7 +1505,8 @@ export default function App() {
                 {casino.cases.map((c) => (
                   <div key={c.id} className="row">
                     <div>
-                      {c.name} <span className="muted mono">{c.code}</span>
+                      {c.displayName || caseName(c.code, c.name)}{' '}
+                      <span className="muted mono">{c.code}</span>
                       {!c.isActive && (
                         <span className="badge badge-warn" style={{ marginLeft: 6 }}>
                           выкл
@@ -1204,7 +1524,7 @@ export default function App() {
                 {casino.recent.map((o) => (
                   <div key={o.id} className="row">
                     <div>
-                      {o.case} → <strong>{o.fish}</strong>
+                      {o.case} → <strong>{fishName(undefined, o.fish)}</strong>
                     </div>
                     <div className="mono">{n(o.paid)}</div>
                     <div className="mono ok">{n(o.value)}</div>
