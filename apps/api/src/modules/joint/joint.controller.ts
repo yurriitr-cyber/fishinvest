@@ -29,7 +29,7 @@ class ProposeBuyDto {
   fishId!: string;
 
   @IsInt()
-  @Min(2)
+  @Min(1)
   quantity!: number;
 }
 

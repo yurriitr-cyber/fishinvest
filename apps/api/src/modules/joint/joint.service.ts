@@ -181,9 +181,9 @@ export class JointService {
     partnerUsername?: string,
   ) {
     const qtyInt = Math.floor(Number(quantity));
-    if (!Number.isFinite(qtyInt) || qtyInt < 2 || qtyInt % 2 !== 0) {
+    if (!Number.isFinite(qtyInt) || qtyInt < 1) {
       throw new BadRequestException(
-        'Для совместной покупки нужно чётное количество (минимум 2)',
+        'Для совместной покупки нужно минимум 1 рыба',
       );
     }
 
@@ -262,6 +262,7 @@ export class JointService {
       },
     });
 
+    const halfQty = new Prisma.Decimal(qtyInt).div(2);
     const label = htmlEscape(fishDisplayName(fish.symbol, fish.name));
     const who = htmlEscape(
       initiator.username || initiator.firstName || 'Друг',
@@ -272,8 +273,8 @@ export class JointService {
         `🤝 <b>Совместная покупка</b>`,
         '',
         `<b>${who}</b> предлагает купить <b>${label}</b> вместе.`,
-        `Количество: <b>${qtyInt}</b> (вам <b>${qtyInt / 2}</b>)`,
-        `Ваша доля: <b>${half.toFixed(2)} CR</b> (50%)`,
+        `Количество: <b>${qtyInt}</b> · ваша доля <b>${halfQty.toFixed(2)}</b> (50%)`,
+        `Ваша оплата: <b>${half.toFixed(2)} CR</b> (50% цены)`,
         `Цена сейчас: <b>${unitPrice.toFixed(2)} CR</b>`,
         '',
         'Примите или отклоните ниже. Можно также открыть Активы в приложении.',
@@ -467,7 +468,7 @@ export class JointService {
     partner: { telegramId: bigint };
   }) {
     const qtyInt = Math.floor(Number(proposal.quantity));
-    const halfQty = qtyInt / 2;
+    const halfQty = new Prisma.Decimal(qtyInt).div(2);
 
     try {
       await this.prisma.db.$transaction(async (tx) => {
@@ -496,11 +497,11 @@ export class JointService {
           throw new BadRequestException('Sold out');
         }
 
-        // Use live price for fairness, but charge at proposal snapshot if higher for buyers? Use live.
+        // Live price; cost and quantity split 50/50 (e.g. 1 fish → 0.5 each).
         const unitPrice = fish.currentPrice;
         const totalAmount = unitPrice.mul(qtyInt);
         const eachPay = totalAmount.div(2);
-        const eachQty = new Prisma.Decimal(halfQty);
+        const eachQty = halfQty;
 
         await this.ledger.debitInTransaction(tx, {
           userId: proposal.initiatorId,
@@ -583,7 +584,7 @@ export class JointService {
     const label = htmlEscape(fishDisplayName(proposal.fish.symbol, proposal.fish.name));
     await this.tg.sendMessage(
       proposal.initiator.telegramId,
-      `✅ Друг принял! Совместно купили <b>${label}</b> ×${qtyInt}. Доля каждого: ${halfQty}.`,
+      `✅ Друг принял! Совместно купили <b>${label}</b> ×${qtyInt}. Доля каждого: ${halfQty.toFixed(2)}.`,
     );
     if (proposal.telegramMsgId) {
       await this.tg.editMessage(

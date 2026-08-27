@@ -113,8 +113,8 @@ export function Trade({
         setError('Выберите друга или введите @username');
         return;
       }
-      if (quantity < 2 || quantity % 2 !== 0) {
-        setError('Для покупки вдвоём нужно чётное количество (минимум 2)');
+      if (quantity < 1) {
+        setError('Укажите количество');
         return;
       }
       setBusy(true);
@@ -318,7 +318,7 @@ export function Trade({
                   className={`chip ${jointMode ? 'active' : ''}`}
                   onClick={() => {
                     setJointMode((v) => !v);
-                    if (!jointMode && quantity % 2 !== 0) setQty('2');
+                    if (!jointMode && quantity < 1) setQty('1');
                   }}
                 >
                   Купить вместе с другом
@@ -326,8 +326,9 @@ export function Trade({
                 {jointMode && (
                   <>
                     <p className="joint-hint">
-                      50/50. Другу придёт запрос в Telegram — принять или
-                      отклонить. Количество должно быть чётным.
+                      Платите пополам. Можно купить даже 1 дорогую рыбу —
+                      каждому достанется доля 0.5. Другу придёт запрос в
+                      Telegram.
                     </p>
                     {friends.length > 0 && (
                       <div className="joint-friends">
@@ -373,7 +374,7 @@ export function Trade({
             </div>
             <div className="qty-presets">
               {(jointMode && side === 'buy'
-                ? ['2', '4', '10', '20', '100']
+                ? ['1', '2', '5', '10', '20']
                 : ['1', '5', '10', '25', '100']
               )
                 .concat(
