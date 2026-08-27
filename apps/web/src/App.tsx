@@ -118,7 +118,14 @@ export default function App() {
         );
         break;
       case 'portfolio':
-        body = <PortfolioPage me={me} onSelectFish={setSelectedFishId} />;
+        body = (
+          <PortfolioPage
+            me={me}
+            onSelectFish={setSelectedFishId}
+            onSold={refreshMe}
+            notify={notify}
+          />
+        );
         break;
       case 'deposit':
         body = (
