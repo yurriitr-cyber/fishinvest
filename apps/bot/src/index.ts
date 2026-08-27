@@ -220,8 +220,29 @@ bot.catch((err) => {
   console.error('Bot error', err);
 });
 
+async function syncMenuButton() {
+  if (!webAppUrl.startsWith('https://')) {
+    console.warn(
+      'Skip setChatMenuButton — WEBAPP_URL is not https. Blue Open button stays whatever BotFather has (often a dead tunnel).',
+    );
+    return;
+  }
+  try {
+    await bot.api.setChatMenuButton({
+      menu_button: {
+        type: 'web_app',
+        text: 'Open',
+        web_app: { url: webAppUrl },
+      },
+    });
+    console.log(`Menu button → ${webAppUrl}`);
+  } catch (err) {
+    console.error('setChatMenuButton failed', err);
+  }
+}
+
 bot.start({
-  onStart: (info) => {
+  onStart: async (info) => {
     if (info.username) {
       if (botUsername !== info.username) {
         console.warn(
@@ -238,5 +259,6 @@ bot.start({
         'WEBAPP_URL is not https — Mini App button falls back to t.me link. Set WEBAPP_URL to your Railway web URL.',
       );
     }
+    await syncMenuButton();
   },
 });
