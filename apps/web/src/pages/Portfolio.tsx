@@ -172,10 +172,7 @@ export function PortfolioPage({
                   <MediaSlot className="thumb" label={fishGlyph(p.symbol)} />
                 )}
                 <div className="row-main">
-                  <div className="name">
-                    {p.symbol}
-                    <span className="qty-badge">×{formatQty(p.quantity)}</span>
-                  </div>
+                  <div className="name">{p.symbol}</div>
                   <div className="meta">
                     ср. {formatStars(p.avgBuyPrice, 2)} ·{' '}
                     {formatStars(p.currentValue, 2)} CR

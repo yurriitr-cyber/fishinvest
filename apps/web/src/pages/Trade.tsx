@@ -11,6 +11,16 @@ import {
 } from '../lib/format';
 import { fishLore } from '../lib/fishLore';
 import { fishName, rarityLabel, translateError } from '../lib/labels';
+import { hapticImpact, hapticNotify } from '../lib/telegram';
+
+function formatQty(value: string | number) {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(n)) return '0';
+  if (Number.isInteger(n) || Math.abs(n - Math.round(n)) < 1e-9) {
+    return String(Math.round(n));
+  }
+  return n.toLocaleString('ru-RU', { maximumFractionDigits: 4 });
+}
 
 export function Trade({
   fishId,
@@ -26,17 +36,35 @@ export function Trade({
   notify: (msg: string) => void;
 }) {
   const [fish, setFish] = useState<Fish | null>(null);
+  const [ownedQty, setOwnedQty] = useState(0);
   const [qty, setQty] = useState('1');
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmSellAll, setConfirmSellAll] = useState(false);
+
+  async function refreshOwned() {
+    try {
+      const portfolio = await api.portfolio();
+      const position = portfolio.positions.find((p) => p.fishId === fishId);
+      setOwnedQty(Math.floor(Number(position?.quantity ?? 0)) || 0);
+    } catch {
+      /* keep previous */
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const data = await api.fishOne(fishId);
-        if (!cancelled) setFish(data);
+        const [data, portfolio] = await Promise.all([
+          api.fishOne(fishId),
+          api.portfolio(),
+        ]);
+        if (cancelled) return;
+        setFish(data);
+        const position = portfolio.positions.find((p) => p.fishId === fishId);
+        setOwnedQty(Math.floor(Number(position?.quantity ?? 0)) || 0);
       } catch (e) {
         if (!cancelled) {
           setError(
@@ -69,6 +97,7 @@ export function Trade({
       else await api.sell(fish.id, quantity, key);
       const refreshed = await api.fishOne(fish.id);
       setFish(refreshed);
+      await refreshOwned();
       await onTraded();
       notify(
         side === 'buy'
@@ -84,6 +113,36 @@ export function Trade({
     }
   }
 
+  async function sellAll() {
+    if (!fish || ownedQty <= 0 || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await hapticImpact('medium');
+      await api.sell(
+        fish.id,
+        ownedQty,
+        `sell-all-one:${fish.id}:${Date.now()}`,
+      );
+      const refreshed = await api.fishOne(fish.id);
+      setFish(refreshed);
+      setOwnedQty(0);
+      setConfirmSellAll(false);
+      await hapticNotify('success');
+      await onTraded();
+      notify(`Продано всё: ${ownedQty} ${fish.symbol}`);
+    } catch (e) {
+      await hapticNotify('error');
+      setConfirmSellAll(false);
+      setError(
+        translateError(e instanceof Error ? e.message : 'Не удалось продать'),
+      );
+      await refreshOwned();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!fish && !error) {
     return (
       <div className="state-box">
@@ -94,6 +153,7 @@ export function Trade({
   }
 
   const soldOut = fish ? fish.availableSupply <= 0 : false;
+  const hasOwned = ownedQty > 0;
 
   return (
     <div className="screen">
@@ -120,7 +180,10 @@ export function Trade({
               <div>
                 <div className="eyebrow">{rarityLabel(fish.rarity)}</div>
                 <h1>{fish.symbol}</h1>
-                <p>{fishName(fish.symbol, fish.name)}</p>
+                <p>
+                  {fishName(fish.symbol, fish.name)}
+                  {hasOwned ? ` · у вас ${formatQty(ownedQty)} шт` : ''}
+                </p>
               </div>
             </div>
             <div className="balance-pill">
@@ -164,7 +227,9 @@ export function Trade({
           </div>
 
           <div className="trade-panel">
-            <div className="side-toggle">
+            <div
+              className={`side-toggle${hasOwned ? ' with-sell-all' : ''}`}
+            >
               <button
                 className={`buy ${side === 'buy' ? 'active' : ''}`}
                 type="button"
@@ -179,6 +244,16 @@ export function Trade({
               >
                 Продать
               </button>
+              {hasOwned && (
+                <button
+                  className="sell-all"
+                  type="button"
+                  disabled={busy || fish.isFrozen}
+                  onClick={() => setConfirmSellAll(true)}
+                >
+                  Продать всё
+                </button>
+              )}
             </div>
 
             <div className="section-title" style={{ marginTop: 0 }}>
@@ -192,16 +267,19 @@ export function Trade({
               />
             </div>
             <div className="qty-presets">
-              {['1', '5', '10', '25', '100'].map((n) => (
-                <button
-                  key={n}
-                  className={`chip ${qty === n ? 'active' : ''}`}
-                  type="button"
-                  onClick={() => setQty(n)}
-                >
-                  {n}
-                </button>
-              ))}
+              {['1', '5', '10', '25', '100']
+                .concat(hasOwned ? [String(ownedQty)] : [])
+                .filter((n, i, arr) => arr.indexOf(n) === i)
+                .map((n) => (
+                  <button
+                    key={n}
+                    className={`chip ${qty === n ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => setQty(n)}
+                  >
+                    {n === String(ownedQty) && hasOwned ? 'Всё' : n}
+                  </button>
+                ))}
             </div>
 
             <div className="summary">
@@ -236,6 +314,42 @@ export function Trade({
             </button>
           </div>
         </>
+      )}
+
+      {confirmSellAll && fish && (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sell-one-all-title"
+        >
+          <div className="confirm-sheet">
+            <div className="eyebrow">Подтверждение</div>
+            <h2 id="sell-one-all-title">Продать всё?</h2>
+            <p>
+              Продадите все {formatQty(ownedQty)} шт {fish.symbol} по текущей
+              цене рынка. Это нельзя отменить.
+            </p>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={busy}
+                onClick={() => setConfirmSellAll(false)}
+              >
+                Нет
+              </button>
+              <button
+                type="button"
+                className="btn btn-sell"
+                disabled={busy}
+                onClick={() => void sellAll()}
+              >
+                {busy ? 'Продаём…' : 'Да, продать'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
