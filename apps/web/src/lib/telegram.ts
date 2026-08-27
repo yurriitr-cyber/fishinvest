@@ -47,11 +47,59 @@ function resolveStartParam(lp?: LaunchParamsLike): string | undefined {
   }
 }
 
+function readNativeTelegramInitData(): {
+  raw?: string;
+  startParam?: string;
+} {
+  try {
+    const tg = (
+      window as unknown as {
+        Telegram?: {
+          WebApp?: {
+            initData?: string;
+            initDataUnsafe?: { start_param?: string };
+            ready?: () => void;
+            expand?: () => void;
+          };
+        };
+      }
+    ).Telegram?.WebApp;
+    if (!tg) return {};
+    try {
+      tg.ready?.();
+      tg.expand?.();
+    } catch {
+      /* ignore */
+    }
+    const raw = tg.initData?.trim();
+    return {
+      raw: raw || undefined,
+      startParam: tg.initDataUnsafe?.start_param || undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 export async function bootstrapTelegram() {
   const params = new URLSearchParams(window.location.search);
   const startFromUrl = resolveStartParam();
   const devId =
     params.get('devUser') || localStorage.getItem('rf_dev_tg_id') || '1001';
+
+  // Prefer native WebApp bridge first — more reliable on Telegram Desktop WebView
+  const native = readNativeTelegramInitData();
+  if (native.raw) {
+    configureAuth({
+      mode: 'tma',
+      raw: native.raw,
+      startParam: resolveStartParam({
+        initDataRaw: native.raw,
+        startParam: native.startParam,
+      }),
+    });
+    return;
+  }
 
   try {
     const sdk = await import('@telegram-apps/sdk');
