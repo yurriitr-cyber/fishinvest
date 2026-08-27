@@ -6,7 +6,6 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { MediaSlot } from '../components/MediaSlot';
 import {
   api,
   type CaseLootItem,
@@ -23,6 +22,17 @@ import {
   translateError,
 } from '../lib/labels';
 import { hapticImpact, hapticNotify } from '../lib/telegram';
+
+const CASE_ART: Record<string, string> = {
+  TIDE: '/cases/TIDE.jpg',
+  REEF: '/cases/REEF.jpg',
+  ABYSS: '/cases/ABYSS.jpg',
+  LEVIATHAN: '/cases/LEVIATHAN.jpg',
+};
+
+function caseArt(code: string) {
+  return CASE_ART[code.toUpperCase()] || `/cases/${code.toUpperCase()}.jpg`;
+}
 
 /** Reel geometry — cell + gap must match CSS. */
 const CELL = 88;
@@ -284,7 +294,12 @@ export function Casino({
             >
               <span className="case-shine" aria-hidden />
               <div className="case-tile-art">
-                <MediaSlot className="crate" label={caseName(c.code, c.name)} />
+                <img
+                  src={caseArt(c.code)}
+                  alt=""
+                  className="case-art-img"
+                  draggable={false}
+                />
               </div>
               <div className="case-tile-name">{caseName(c.code, c.name)}</div>
               <div className="case-tile-price">
