@@ -37,10 +37,20 @@ const MIME = {
 
 function sendFile(res, filePath) {
   const ext = extname(filePath).toLowerCase();
+  const rel = filePath.split(`${sep}dist${sep}`).pop() || filePath;
+  // Banners/OG/art get updated in place — don't pin them immutable for a year
+  // (iOS WebView otherwise keeps the old image forever).
+  const softCache =
+    /(^|[/\\])(banners|og|fish|cases)([/\\]|$)/i.test(rel) ||
+    /[/\\](banner-|invite\.)/i.test(rel);
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
     'Cache-Control':
-      ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+      ext === '.html'
+        ? 'no-cache'
+        : softCache
+          ? 'public, max-age=300, must-revalidate'
+          : 'public, max-age=31536000, immutable',
   });
   createReadStream(filePath).pipe(res);
 }
