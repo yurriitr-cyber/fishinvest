@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IsBoolean, IsInt, IsString, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { InitData } from '@telegram-apps/init-data-node';
 import { TmaAuthGuard } from '../auth/tma-auth.guard';
 import { TelegramInitData } from '../auth/telegram-init-data.decorator';
@@ -17,8 +17,13 @@ import { UsersService } from '../users/users.service';
 import { JointService } from './joint.service';
 
 class ProposeBuyDto {
+  @IsOptional()
   @IsString()
-  partnerId!: string;
+  partnerId?: string;
+
+  @IsOptional()
+  @IsString()
+  partnerUsername?: string;
 
   @IsString()
   fishId!: string;
@@ -87,9 +92,10 @@ export class JointController {
     const { user } = await this.users.getOrCreateFromInitData(initData);
     return this.joint.proposeBuy(
       user.id,
-      dto.partnerId,
       dto.fishId,
       dto.quantity,
+      dto.partnerId,
+      dto.partnerUsername,
     );
   }
 

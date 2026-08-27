@@ -12,6 +12,13 @@ import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramNotifyService } from './telegram-notify.service';
 
+function htmlEscape(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 @Injectable()
 export class JointService {
   constructor(
@@ -20,18 +27,29 @@ export class JointService {
     private readonly tg: TelegramNotifyService,
   ) {}
 
-  /** Friends = people you invited + your referrer (if any). */
+  /** Friends = people you invited + people who invited you. */
   async listFriends(userId: string) {
-    const [outgoing, me] = await Promise.all([
+    const [outgoing, incoming, me] = await Promise.all([
       this.prisma.db.referral.findMany({
-        where: { referrerId: userId, status: 'COMPLETED' },
+        where: { referrerId: userId },
         include: {
           referred: {
             select: {
               id: true,
               username: true,
               firstName: true,
-              telegramId: true,
+            },
+          },
+        },
+      }),
+      this.prisma.db.referral.findMany({
+        where: { referredId: userId },
+        include: {
+          referrer: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
             },
           },
         },
@@ -44,7 +62,13 @@ export class JointService {
               id: true,
               username: true,
               firstName: true,
-              telegramId: true,
+            },
+          },
+          referrals: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
             },
           },
         },
@@ -55,21 +79,50 @@ export class JointService {
       string,
       { id: string; username: string | null; firstName: string | null }
     >();
-    for (const r of outgoing) {
-      map.set(r.referred.id, {
-        id: r.referred.id,
-        username: r.referred.username,
-        firstName: r.referred.firstName,
+    const add = (u?: { id: string; username: string | null; firstName: string | null } | null) => {
+      if (!u || u.id === userId) return;
+      map.set(u.id, {
+        id: u.id,
+        username: u.username,
+        firstName: u.firstName,
       });
-    }
-    if (me?.referredBy) {
-      map.set(me.referredBy.id, {
-        id: me.referredBy.id,
-        username: me.referredBy.username,
-        firstName: me.referredBy.firstName,
-      });
-    }
+    };
+    for (const r of outgoing) add(r.referred);
+    for (const r of incoming) add(r.referrer);
+    add(me?.referredBy);
+    for (const u of me?.referrals ?? []) add(u);
     return [...map.values()];
+  }
+
+  private async resolvePartner(
+    initiatorId: string,
+    partnerId?: string,
+    partnerUsername?: string,
+  ) {
+    const username = (partnerUsername || '').replace(/^@/, '').trim();
+    if (!partnerId && !username) {
+      throw new BadRequestException('Выберите друга или укажите @username');
+    }
+
+    const partner = partnerId
+      ? await this.prisma.db.user.findUnique({
+          where: { id: partnerId },
+          include: { gameBalance: true },
+        })
+      : await this.prisma.db.user.findFirst({
+          where: { username: { equals: username, mode: 'insensitive' } },
+          include: { gameBalance: true },
+        });
+
+    if (!partner) {
+      throw new NotFoundException(
+        'Друг не найден. Он должен хотя бы раз открыть приложение, либо укажите точный @username.',
+      );
+    }
+    if (partner.id === initiatorId) {
+      throw new BadRequestException('Нельзя пригласить самого себя');
+    }
+    return partner;
   }
 
   async listMine(userId: string) {
@@ -122,13 +175,11 @@ export class JointService {
 
   async proposeBuy(
     initiatorId: string,
-    partnerId: string,
     fishId: string,
     quantity: number,
+    partnerId?: string,
+    partnerUsername?: string,
   ) {
-    if (initiatorId === partnerId) {
-      throw new BadRequestException('Нельзя пригласить самого себя');
-    }
     const qtyInt = Math.floor(Number(quantity));
     if (!Number.isFinite(qtyInt) || qtyInt < 2 || qtyInt % 2 !== 0) {
       throw new BadRequestException(
@@ -136,21 +187,16 @@ export class JointService {
       );
     }
 
-    const friends = await this.listFriends(initiatorId);
-    if (!friends.some((f) => f.id === partnerId)) {
-      throw new ForbiddenException(
-        'Партнёр должен быть в друзьях (реферальная связь)',
-      );
-    }
+    const partner = await this.resolvePartner(
+      initiatorId,
+      partnerId,
+      partnerUsername,
+    );
 
-    const [fish, initiator, partner] = await Promise.all([
+    const [fish, initiator] = await Promise.all([
       this.prisma.db.fish.findUnique({ where: { id: fishId } }),
       this.prisma.db.user.findUnique({
         where: { id: initiatorId },
-        include: { gameBalance: true },
-      }),
-      this.prisma.db.user.findUnique({
-        where: { id: partnerId },
         include: { gameBalance: true },
       }),
     ]);
@@ -158,7 +204,7 @@ export class JointService {
     if (fish.isFrozen) {
       throw new BadRequestException('Trading for this fish is frozen');
     }
-    if (!initiator || !partner) throw new NotFoundException('User not found');
+    if (!initiator) throw new NotFoundException('User not found');
     if (fish.availableSupply < qtyInt) {
       throw new BadRequestException(
         fish.availableSupply <= 0
@@ -186,8 +232,8 @@ export class JointService {
         status: 'PENDING',
         kind: 'BUY',
         OR: [
-          { initiatorId, partnerId, fishId },
-          { initiatorId: partnerId, partnerId: initiatorId, fishId },
+          { initiatorId, partnerId: partner.id, fishId },
+          { initiatorId: partner.id, partnerId: initiatorId, fishId },
         ],
       },
     });
@@ -195,13 +241,13 @@ export class JointService {
       throw new ConflictException('Уже есть активное приглашение по этой рыбе');
     }
 
-    const key = `joint-buy:${initiatorId}:${partnerId}:${fishId}:${randomUUID()}`;
+    const key = `joint-buy:${initiatorId}:${partner.id}:${fishId}:${randomUUID()}`;
     const proposal = await this.prisma.db.jointProposal.create({
       data: {
         kind: 'BUY',
         status: 'PENDING',
         initiatorId,
-        partnerId,
+        partnerId: partner.id,
         fishId,
         quantity: qtyInt,
         unitPrice,
@@ -216,20 +262,21 @@ export class JointService {
       },
     });
 
-    const label = fishDisplayName(fish.symbol, fish.name);
-    const who =
-      initiator.username || initiator.firstName || 'Друг';
+    const label = htmlEscape(fishDisplayName(fish.symbol, fish.name));
+    const who = htmlEscape(
+      initiator.username || initiator.firstName || 'Друг',
+    );
     const msgId = await this.tg.sendMessage(
       partner.telegramId,
       [
-        `🤝 *Совместная покупка*`,
+        `🤝 <b>Совместная покупка</b>`,
         '',
-        `*${who}* предлагает купить *${label}* вместе.`,
-        `Количество: *${qtyInt}* (вам *${qtyInt / 2}*)`,
-        `Ваша доля: *${half.toFixed(2)} CR* (50%)`,
-        `Цена сейчас: *${unitPrice.toFixed(2)} CR*`,
+        `<b>${who}</b> предлагает купить <b>${label}</b> вместе.`,
+        `Количество: <b>${qtyInt}</b> (вам <b>${qtyInt / 2}</b>)`,
+        `Ваша доля: <b>${half.toFixed(2)} CR</b> (50%)`,
+        `Цена сейчас: <b>${unitPrice.toFixed(2)} CR</b>`,
         '',
-        'Примите или отклоните ниже.',
+        'Примите или отклоните ниже. Можно также открыть Активы в приложении.',
       ].join('\n'),
       {
         inline_keyboard: [
@@ -311,19 +358,19 @@ export class JointService {
       },
     });
 
-    const label = fishDisplayName(holding.fish.symbol, holding.fish.name);
-    const who = me.user.username || me.user.firstName || 'Друг';
+    const label = htmlEscape(fishDisplayName(holding.fish.symbol, holding.fish.name));
+    const who = htmlEscape(me.user.username || me.user.firstName || 'Друг');
     const half = totalAmount.div(2);
     const msgId = await this.tg.sendMessage(
       partner.user.telegramId,
       [
-        `🤝 *Совместная продажа*`,
+        `🤝 <b>Совместная продажа</b>`,
         '',
-        `*${who}* предлагает продать *${label}* вместе.`,
-        `Количество: *${holding.quantity.toFixed(0)}*`,
-        `Вам ~*${half.toFixed(2)} CR* (50%)`,
+        `<b>${who}</b> предлагает продать <b>${label}</b> вместе.`,
+        `Количество: <b>${holding.quantity.toFixed(0)}</b>`,
+        `Вам ~<b>${half.toFixed(2)} CR</b> (50%)`,
         '',
-        'Оба должны согласиться. Примите или отклоните.',
+        'Оба должны согласиться. Примите или отклоните. Можно также открыть Активы.',
       ].join('\n'),
       {
         inline_keyboard: [
@@ -387,13 +434,13 @@ export class JointService {
       });
       await this.tg.sendMessage(
         proposal.initiator.telegramId,
-        `❌ Друг отклонил совместн${proposal.kind === 'BUY' ? 'ую покупку' : 'ую продажу'} *${fishDisplayName(proposal.fish.symbol, proposal.fish.name)}*.`,
+        `❌ Друг отклонил совместн${proposal.kind === 'BUY' ? 'ую покупку' : 'ую продажу'} <b>${htmlEscape(fishDisplayName(proposal.fish.symbol, proposal.fish.name))}</b>.`,
       );
       if (proposal.telegramMsgId) {
         await this.tg.editMessage(
           proposal.partner.telegramId,
           Number(proposal.telegramMsgId),
-          `❌ Отклонено: *${fishDisplayName(proposal.fish.symbol, proposal.fish.name)}*`,
+          `❌ Отклонено: <b>${htmlEscape(fishDisplayName(proposal.fish.symbol, proposal.fish.name))}</b>`,
         );
       }
       return this.serializeProposal(updated);
@@ -533,16 +580,16 @@ export class JointService {
       throw e;
     }
 
-    const label = fishDisplayName(proposal.fish.symbol, proposal.fish.name);
+    const label = htmlEscape(fishDisplayName(proposal.fish.symbol, proposal.fish.name));
     await this.tg.sendMessage(
       proposal.initiator.telegramId,
-      `✅ Друг принял! Совместно купили *${label}* ×${qtyInt}. Доля каждого: ${halfQty}.`,
+      `✅ Друг принял! Совместно купили <b>${label}</b> ×${qtyInt}. Доля каждого: ${halfQty}.`,
     );
     if (proposal.telegramMsgId) {
       await this.tg.editMessage(
         proposal.partner.telegramId,
         Number(proposal.telegramMsgId),
-        `✅ Принято: совместная покупка *${label}* ×${qtyInt}`,
+        `✅ Принято: совместная покупка <b>${label}</b> ×${qtyInt}`,
       );
     }
 
@@ -653,17 +700,17 @@ export class JointService {
       await tx.jointHolding.delete({ where: { id: holding.id } });
     });
 
-    const label = fishDisplayName(proposal.fish.symbol, proposal.fish.name);
+    const label = htmlEscape(fishDisplayName(proposal.fish.symbol, proposal.fish.name));
     const half = totalProceeds.div(2).toFixed(2);
     await this.tg.sendMessage(
       proposal.initiator.telegramId,
-      `✅ Совместная продажа *${label}* прошла. Вам ~*${half} CR*.`,
+      `✅ Совместная продажа <b>${label}</b> прошла. Вам ~<b>${half} CR</b>.`,
     );
     if (proposal.telegramMsgId) {
       await this.tg.editMessage(
         proposal.partner.telegramId,
         Number(proposal.telegramMsgId),
-        `✅ Продано вместе: *${label}*. Вам ~*${half} CR*.`,
+        `✅ Продано вместе: <b>${label}</b>. Вам ~<b>${half} CR</b>.`,
       );
     }
 

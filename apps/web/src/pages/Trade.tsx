@@ -36,7 +36,7 @@ export function Trade({
 }) {
   const [fish, setFish] = useState<Fish | null>(null);
   const [ownedQty, setOwnedQty] = useState(0);
-  const [qty, setQty] = useState('2');
+  const [qty, setQty] = useState('1');
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,10 +45,17 @@ export function Trade({
     Array<{ id: string; username: string | null; firstName: string | null }>
   >([]);
   const [partnerId, setPartnerId] = useState('');
+  const [partnerUsername, setPartnerUsername] = useState('');
   const [jointMode, setJointMode] = useState(false);
 
   useEffect(() => {
-    api.jointFriends().then(setFriends).catch(() => setFriends([]));
+    api
+      .jointFriends()
+      .then((list) => {
+        setFriends(list);
+        if (list.length === 1) setPartnerId(list[0].id);
+      })
+      .catch(() => setFriends([]));
   }, []);
 
   async function refreshOwned() {
@@ -102,8 +109,8 @@ export function Trade({
   async function submit() {
     if (!fish || quantity <= 0) return;
     if (jointMode && side === 'buy') {
-      if (!partnerId) {
-        setError('Выберите друга для совместной покупки');
+      if (!partnerId && !partnerUsername.trim()) {
+        setError('Выберите друга или введите @username');
         return;
       }
       if (quantity < 2 || quantity % 2 !== 0) {
@@ -113,9 +120,16 @@ export function Trade({
       setBusy(true);
       setError(null);
       try {
-        await api.jointBuy(partnerId, fish.id, quantity);
+        await api.jointBuy(
+          partnerId || undefined,
+          fish.id,
+          quantity,
+          partnerId ? undefined : partnerUsername.trim(),
+        );
         await hapticNotify('success');
-        notify('Приглашение отправлено другу в Telegram');
+        notify(
+          'Запрос отправлен. Друг получит его в Telegram и во вкладке Активы.',
+        );
         setJointMode(false);
       } catch (e) {
         await hapticNotify('error');
@@ -297,7 +311,7 @@ export function Trade({
             <div className="section-title" style={{ marginTop: 0 }}>
               Количество
             </div>
-            {side === 'buy' && friends.length > 0 && (
+            {side === 'buy' && (
               <div className="joint-box">
                 <button
                   type="button"
@@ -315,29 +329,40 @@ export function Trade({
                       50/50. Другу придёт запрос в Telegram — принять или
                       отклонить. Количество должно быть чётным.
                     </p>
-                    <select
-                      className="joint-select"
-                      value={partnerId}
-                      onChange={(e) => setPartnerId(e.target.value)}
-                    >
-                      <option value="">Выберите друга</option>
-                      {friends.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.username
+                    {friends.length > 0 && (
+                      <div className="joint-friends">
+                        {friends.map((f) => {
+                          const label = f.username
                             ? `@${f.username}`
-                            : f.firstName || 'Друг'}
-                        </option>
-                      ))}
-                    </select>
+                            : f.firstName || 'Друг';
+                          return (
+                            <button
+                              key={f.id}
+                              type="button"
+                              className={`chip ${partnerId === f.id ? 'active' : ''}`}
+                              onClick={() => {
+                                setPartnerId(f.id);
+                                setPartnerUsername('');
+                              }}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <input
+                      className="joint-select"
+                      placeholder="@username друга в Telegram"
+                      value={partnerUsername}
+                      onChange={(e) => {
+                        setPartnerUsername(e.target.value);
+                        setPartnerId('');
+                      }}
+                    />
                   </>
                 )}
               </div>
-            )}
-            {side === 'buy' && friends.length === 0 && (
-              <p className="joint-hint">
-                Пригласите друга во вкладке «Друзья», чтобы покупать активы
-                вдвоём.
-              </p>
             )}
             <div className="qty-row">
               <input

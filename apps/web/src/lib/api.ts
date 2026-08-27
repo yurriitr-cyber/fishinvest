@@ -348,10 +348,20 @@ export const api = {
   casinoOpenings: (limit = 20) =>
     request<CaseOpening[]>(`/casino/openings?limit=${limit}`),
   jointFriends: () => request<JointFriend[]>('/joint/friends'),
-  jointBuy: (partnerId: string, fishId: string, quantity: number) =>
+  jointBuy: (
+    partnerId: string | undefined,
+    fishId: string,
+    quantity: number,
+    partnerUsername?: string,
+  ) =>
     request('/joint/buy', {
       method: 'POST',
-      body: JSON.stringify({ partnerId, fishId, quantity }),
+      body: JSON.stringify({
+        partnerId: partnerId || undefined,
+        partnerUsername: partnerUsername || undefined,
+        fishId,
+        quantity,
+      }),
     }),
   jointSell: (holdingId: string) =>
     request('/joint/sell', {

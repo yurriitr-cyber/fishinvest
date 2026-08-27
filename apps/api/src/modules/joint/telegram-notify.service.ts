@@ -30,7 +30,7 @@ export class TelegramNotifyService {
         body: JSON.stringify({
           chat_id: String(telegramId),
           text,
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: replyMarkup,
         }),
       });
@@ -65,7 +65,7 @@ export class TelegramNotifyService {
           chat_id: String(telegramId),
           message_id: messageId,
           text,
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
         }),
       });
     } catch (err) {

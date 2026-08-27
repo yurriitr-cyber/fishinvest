@@ -988,6 +988,12 @@ button {
   font-size: 0.92rem;
 }
 
+.joint-friends {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .position-block {
   display: flex;
   flex-direction: column;
