@@ -172,7 +172,7 @@ function serveInviteLanding(req, res) {
     .trim();
   const origin = `${proto}://${host}`;
   const tgUrl = `https://t.me/${bot}?start=${encodeURIComponent(`ref_${code}`)}`;
-  const imageUrl = `${origin}/og/invite.jpg?v=1`;
+  const imageUrl = `${origin}/og/invite.jpg?v=2`;
   const title = 'Rare Fish — коллекционируй редких рыб со мной';
   const description = 'Получай 50 CR по моей ссылке!';
 

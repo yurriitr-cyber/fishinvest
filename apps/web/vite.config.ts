@@ -19,7 +19,7 @@ function inviteOgPlugin(): Plugin {
         const host = req.headers.host || 'localhost:5180';
         const origin = `http://${host}`;
         const tgUrl = `https://t.me/${bot}?start=${encodeURIComponent(`ref_${code}`)}`;
-        const imageUrl = `${origin}/og/invite.jpg?v=1`;
+        const imageUrl = `${origin}/og/invite.jpg?v=2`;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.end(`<!doctype html><html><head>
 <meta property="og:title" content="Rare Fish — коллекционируй редких рыб со мной" />
