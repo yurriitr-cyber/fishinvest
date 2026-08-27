@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { fishDisplayName } from '../fish/fish-names';
+import { caseDisplayDesc, caseDisplayName } from './case-names';
 
 type WeightedReward = {
   weight: number;
@@ -117,7 +118,7 @@ export class CasinoService {
     return rows.map((o) => ({
       id: o.id,
       caseCode: o.lootCase.code,
-      caseName: o.lootCase.name,
+      caseName: caseDisplayName(o.lootCase.code, o.lootCase.name),
       fishId: o.fish.id,
       symbol: o.fish.symbol,
       name: fishDisplayName(o.fish.symbol, o.fish.name),
@@ -429,8 +430,8 @@ export class CasinoService {
     return {
       id: c.id,
       code: c.code,
-      name: c.name,
-      description: c.description,
+      name: caseDisplayName(c.code, c.name),
+      description: caseDisplayDesc(c.code, c.description),
       priceCredits: priceCredits.toFixed(4),
       sortOrder: c.sortOrder,
       expectedValue: expectedValue.toFixed(4),
@@ -462,7 +463,7 @@ export class CasinoService {
     return {
       id: o.id,
       caseCode: o.lootCase.code,
-      caseName: o.lootCase.name,
+      caseName: caseDisplayName(o.lootCase.code, o.lootCase.name),
       fishId: o.fish.id,
       symbol: o.fish.symbol,
       name: fishDisplayName(o.fish.symbol, o.fish.name),

@@ -284,7 +284,7 @@ export function Casino({
             >
               <span className="case-shine" aria-hidden />
               <div className="case-tile-art">
-                <MediaSlot className="crate" label={c.code} />
+                <MediaSlot className="crate" label={caseName(c.code, c.name)} />
               </div>
               <div className="case-tile-name">{caseName(c.code, c.name)}</div>
               <div className="case-tile-price">
@@ -299,7 +299,7 @@ export function Casino({
         <div className="trade-panel case-panel">
           <div className="case-head">
             <div>
-              <div className="eyebrow">{selected.code}</div>
+              <div className="eyebrow">Кейс</div>
               <div className="case-title">
                 {caseName(selected.code, selected.name)}
               </div>
@@ -361,11 +361,11 @@ export function Casino({
                 <img src={fishImage(reveal.symbol, reveal.imageUrl)} alt="" />
               </div>
               <div className="win-body">
-                <div className="win-rarity">{rarityLabel(reveal.rarity)}</div>
+                <div className="win-rarity">Выпало</div>
                 <div className="win-symbol">
                   {fishName(reveal.symbol, reveal.name)}
                 </div>
-                <div className="win-name">{reveal.symbol}</div>
+                <div className="win-name">{rarityLabel(reveal.rarity)}</div>
                 <div className="win-stats">
                   <span>Стоимость {formatCredits(reveal.fishMarketValue)} CR</span>
                   <span className={pnlClass(reveal.profit ?? 0)}>
@@ -429,7 +429,7 @@ export function Casino({
                   <div className="row-main">
                     <div className="name">{fishName(item.symbol, item.name)}</div>
                     <div className="meta">
-                      {item.symbol} · {rarityLabel(item.rarity)} ·{' '}
+                      {rarityLabel(item.rarity)} ·{' '}
                       {formatCredits(item.marketPrice)} CR
                       {item.available ? '' : ' · распродано'}
                     </div>
