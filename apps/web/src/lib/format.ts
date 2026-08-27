@@ -49,7 +49,12 @@ export function fishGlyph(symbol: string) {
 }
 
 /** Static art lives at /fish/<SYMBOL>.jpg on the Mini App host. */
+const FISH_ART_VER = '20260827d';
+
 export function fishImage(symbol: string, imageUrl?: string | null) {
-  if (imageUrl) return imageUrl;
-  return `/fish/${symbol.toUpperCase()}.jpg`;
+  const base = imageUrl || `/fish/${symbol.toUpperCase()}.jpg`;
+  if (!base.startsWith('/')) return base;
+  return base.includes('?')
+    ? `${base}&v=${FISH_ART_VER}`
+    : `${base}?v=${FISH_ART_VER}`;
 }

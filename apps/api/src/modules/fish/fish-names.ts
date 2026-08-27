@@ -13,7 +13,7 @@ export const FISH_DISPLAY_NAMES: Record<string, string> = {
   ANGEL: 'MOZZI',
   AROWANA: 'TWISTY TOOTH',
   EPUFFER: 'WHALE',
-  ASHARK: 'STINGY',
+  ASHARK: 'DemogorFish',
   BDRAGON: 'MONSTER',
   STING: 'STING',
   MANTA: 'PHANTOM',
