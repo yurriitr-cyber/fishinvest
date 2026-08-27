@@ -22,6 +22,6 @@ export class ReferralController {
   @Post('share-card')
   async shareCard(@TelegramInitData() initData: InitData) {
     const { user } = await this.users.getOrCreateFromInitData(initData);
-    return this.referrals.sendShareCard(user.id);
+    return this.referrals.prepareShareCard(user.id);
   }
 }

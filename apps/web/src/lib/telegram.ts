@@ -156,3 +156,37 @@ export async function hapticNotify(type: 'success' | 'warning' | 'error') {
     /* not in Telegram */
   }
 }
+
+/**
+ * Opens Telegram's native chat picker to send a prepared inline message
+ * (photo/text prepared via Bot API savePreparedInlineMessage).
+ */
+export function sharePreparedMessage(
+  msgId: string,
+): Promise<'sent' | 'declined' | 'unsupported'> {
+  return new Promise((resolve) => {
+    try {
+      const tg = (
+        window as unknown as {
+          Telegram?: {
+            WebApp?: {
+              shareMessage?: (
+                id: string,
+                cb?: (sent: boolean) => void,
+              ) => void;
+            };
+          };
+        }
+      ).Telegram?.WebApp;
+      if (typeof tg?.shareMessage === 'function') {
+        tg.shareMessage(msgId, (sent) =>
+          resolve(sent ? 'sent' : 'declined'),
+        );
+        return;
+      }
+    } catch {
+      /* fall through */
+    }
+    resolve('unsupported');
+  });
+}

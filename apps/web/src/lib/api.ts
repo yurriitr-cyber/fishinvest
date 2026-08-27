@@ -317,9 +317,9 @@ export const api = {
   referralShareCard: () =>
     request<{
       ok: boolean;
-      botUsername: string;
+      preparedMessageId: string;
       deepLink: string;
-      openBotUrl: string;
+      inviteUrl: string;
     }>('/referrals/share-card', { method: 'POST', body: '{}' }),
   depositMethods: () => request<DepositMethod[]>('/deposit/methods'),
   quoteStars: (starAmount: number) =>

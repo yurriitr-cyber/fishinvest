@@ -3,7 +3,7 @@ import { MediaSlot } from '../components/MediaSlot';
 import { api, type Me, type ReferralStats } from '../lib/api';
 import { formatStars } from '../lib/format';
 import { translateError } from '../lib/labels';
-import { hapticImpact } from '../lib/telegram';
+import { hapticImpact, sharePreparedMessage } from '../lib/telegram';
 
 export function Referrals({
   me,
@@ -52,31 +52,29 @@ export function Referrals({
     try {
       await hapticImpact('light');
       const card = await api.referralShareCard();
-      notify('Карточка с фото в чате с ботом — перешли другу');
-      // Jump to the bot chat so the photo is visible to forward.
-      const open =
-        (
-          window as unknown as {
-            Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } };
-          }
-        ).Telegram?.WebApp?.openTelegramLink;
-      if (open) open(card.openBotUrl);
-      else window.open(card.openBotUrl, '_blank', 'noopener,noreferrer');
-    } catch (e) {
-      setError(
-        translateError(
-          e instanceof Error ? e.message : 'Не удалось отправить карточку',
-        ),
-      );
-      // Fallback: classic share without preview
+      const result = await sharePreparedMessage(card.preparedMessageId);
+      if (result === 'sent') {
+        notify('Отправлено');
+        return;
+      }
+      if (result === 'declined') {
+        return;
+      }
+      // Older Telegram without shareMessage — URL share fallback.
       const text = encodeURIComponent(
         'Инвестируй в редких рыб со мной — получи 50 CR по моей ссылке!',
       );
-      const url = encodeURIComponent(inviteUrl());
+      const url = encodeURIComponent(card.inviteUrl || inviteUrl());
       window.open(
         `https://t.me/share/url?url=${url}&text=${text}`,
         '_blank',
         'noopener,noreferrer',
+      );
+    } catch (e) {
+      setError(
+        translateError(
+          e instanceof Error ? e.message : 'Не удалось поделиться',
+        ),
       );
     } finally {
       setSharing(false);
@@ -121,10 +119,9 @@ export function Referrals({
         </div>
         <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
           Друг открывает ссылку → жмёт «Открыть» в боте → бонусы начисляются
-          обоим. По своей ссылке себе бонус не приходит. Кнопка «Поделиться»
-          пришлёт тебе в чат с ботом карточку с картинкой — перешли её другу.
-          С другом можно также покупать дорогие активы вдвоём на экране сделки
-          (50/50).
+          обоим. По своей ссылке себе бонус не приходит. «Поделиться» открывает
+          выбор чатов — отправь карточку с картинкой кому нужно. С другом можно
+          также покупать дорогие активы вдвоём на экране сделки (50/50).
         </p>
       </div>
 

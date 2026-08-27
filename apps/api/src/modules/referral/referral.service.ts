@@ -54,10 +54,10 @@ export class ReferralService {
   }
 
   /**
-   * Sends the invite banner + deep link to the user in the bot chat so they
-   * can forward a real photo message (Telegram share-url rarely shows OG).
+   * Builds a prepared inline photo message so the Mini App can open Telegram's
+   * native share picker (WebApp.shareMessage) and send to chosen chats.
    */
-  async sendShareCard(userId: string) {
+  async prepareShareCard(userId: string) {
     const user = await this.prisma.db.user.findUnique({
       where: { id: userId },
       select: { telegramId: true, referralCode: true },
@@ -87,26 +87,46 @@ export class ReferralService {
       'Получай <b>50 CR</b> по моей ссылке!',
       '',
       deepLink,
-      '',
-      '👉 Перешли это сообщение другу',
     ].join('\n');
 
-    const msgId = await this.tg.sendPhoto(user.telegramId, photoUrl, caption, {
-      inline_keyboard: [
-        [{ text: '🐟 Открыть Rare Fish', url: deepLink }],
-      ],
-    });
-    if (msgId == null) {
+    const preparedId = await this.tg.savePreparedInlineMessage(
+      user.telegramId,
+      {
+        type: 'photo',
+        id: `rf-invite-${user.referralCode}-${Date.now()}`,
+        photo_url: photoUrl,
+        thumbnail_url: photoUrl,
+        photo_width: 1024,
+        photo_height: 481,
+        title: 'Rare Fish',
+        description: 'Получай 50 CR по моей ссылке!',
+        caption,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🐟 Открыть Rare Fish', url: deepLink }],
+          ],
+        },
+      },
+      {
+        allowUserChats: true,
+        allowGroupChats: true,
+        allowChannelChats: true,
+        allowBotChats: false,
+      },
+    );
+
+    if (!preparedId) {
       throw new BadRequestException(
-        'Не удалось отправить карточку. Напиши /start боту и попробуй снова.',
+        'Не удалось подготовить сообщение. Обнови Telegram и попробуй снова.',
       );
     }
 
     return {
       ok: true as const,
-      botUsername,
+      preparedMessageId: preparedId,
       deepLink,
-      openBotUrl: `https://t.me/${botUsername}`,
+      inviteUrl: `${web}/invite/${user.referralCode}`,
     };
   }
 }
