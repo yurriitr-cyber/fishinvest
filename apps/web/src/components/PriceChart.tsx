@@ -7,7 +7,6 @@ type Point = { t: number; p: number };
 export function PriceChart({
   fishId,
   livePrice,
-  volatility,
 }: {
   fishId: string;
   livePrice: string;
@@ -15,7 +14,6 @@ export function PriceChart({
 }) {
   const [points, setPoints] = useState<Point[]>([]);
   const price = Number(livePrice);
-  const vol = Number(volatility ?? 0.15);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,20 +48,16 @@ export function PriceChart({
 
   useEffect(() => {
     if (!Number.isFinite(price)) return;
-    const id = setInterval(() => {
-      setPoints((prev) => {
-        if (prev.length === 0) {
-          return [{ t: Date.now(), p: price }];
-        }
-        const last = prev[prev.length - 1];
-        const amplitude = Math.max(price * vol * 0.008, price < 1 ? 0.0002 : 0.005);
-        const step = (Math.random() - 0.5) * 2 * amplitude;
-        const next = last.p * 0.82 + price * 0.18 + step;
-        return [...prev, { t: Date.now(), p: next }].slice(-100);
-      });
-    }, 700);
-    return () => clearInterval(id);
-  }, [fishId, price, vol]);
+    // Soft follow of live server price — no fake wild jitter (looked like casino).
+    setPoints((prev) => {
+      if (prev.length === 0) {
+        return [{ t: Date.now(), p: price }];
+      }
+      const last = prev[prev.length - 1];
+      if (Math.abs(last.p - price) < price * 1e-9) return prev;
+      return [...prev, { t: Date.now(), p: price }].slice(-100);
+    });
+  }, [fishId, price]);
 
   const { path, area, min, max, change } = useMemo(() => {
     if (points.length < 2) {

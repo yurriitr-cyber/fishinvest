@@ -4,13 +4,13 @@ import { Prisma } from '@rare-fish/db';
 import { PrismaService } from '../prisma/prisma.service';
 
 function parseIntervalMs(value: string | undefined): number {
-  const v = (value || '3s').trim().toLowerCase();
+  const v = (value || '5s').trim().toLowerCase();
   const match = v.match(/^(\d+)(s|m|h|d)$/);
-  if (!match) return 3000;
+  if (!match) return 5000;
   const n = Number(match[1]);
   switch (match[2]) {
     case 's':
-      return Math.max(1000, n * 1000);
+      return Math.max(2000, n * 1000);
     case 'm':
       return n * 60 * 1000;
     case 'h':
@@ -18,16 +18,18 @@ function parseIntervalMs(value: string | undefined): number {
     case 'd':
       return n * 24 * 60 * 60 * 1000;
     default:
-      return 3000;
+      return 5000;
   }
 }
 
-/** Residual jitter when no admin ramp is active. */
+/** Residual jitter when no admin ramp is active — crypto-like micro moves per tick. */
 function tickStep(price: number, volatility: number): number {
-  const vol = Math.max(0.01, volatility);
-  const pct = vol * (0.06 + Math.random() * 0.08);
+  // Seed vols are ~0.02–0.42 (daily-ish). At ~3–5s ticks, real markets move
+  // ~0.02–0.25% typically; memecoins a bit more. Keep abs floor tiny for cheap fish.
+  const vol = Math.max(0.01, Math.min(1, volatility));
+  const pct = vol * (0.0012 + Math.random() * 0.0028); // ~0.012%–0.4% for normal vols
   const abs = price * pct;
-  const floor = price < 0.1 ? 0.0005 : price < 1 ? 0.002 : 0.01;
+  const floor = price < 0.1 ? 0.00001 : price < 1 ? 0.00005 : 0.0002;
   return Math.max(floor, abs);
 }
 
@@ -40,7 +42,7 @@ function smoothstep(t: number): number {
 export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PriceEngineService.name);
   private timer: NodeJS.Timeout | null = null;
-  private intervalMs = 3000;
+  private intervalMs = 5000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -147,7 +149,7 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
 
       // Tiny noise so the chart still breathes (~0.05% of path)
       const path = Math.abs(to - from) || current * 0.01;
-      const micro = (Math.random() * 2 - 1) * path * 0.008;
+      const micro = (Math.random() * 2 - 1) * path * 0.0005;
       newPrice = desired + micro;
 
       if (rawT >= 1) {
@@ -156,21 +158,23 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
         source = 'ADMIN';
       }
     } else {
-      // No admin ramp: normal noisy market
+      // Free market: quiet GBM-ish drift (crypto spot tape), not casino jumps.
       const anchor = previous || current;
-      const pullStrength = Math.max(0.04, 0.22 - vol * 0.35);
+      const pullStrength = Math.max(0.08, 0.35 - vol * 0.4);
       const pull = (anchor - current) * pullStrength;
-      const legacyDrift = current * trend * 0.0015;
+      const legacyDrift = current * trend * 0.0004;
       const step = tickStep(current, vol);
       const noise = (Math.random() * 2 - 1) * step;
-      let delta = pull + legacyDrift + noise + momentum * current * 0.04;
+      let delta = pull + legacyDrift + noise + momentum * current * 0.012;
 
       if (eventMultiplier) {
-        delta += current * (Number(eventMultiplier) - 1) * 0.03;
+        // Events still matter, but don't dump several % every 3s.
+        delta += current * (Number(eventMultiplier) - 1) * 0.008;
       }
 
-      const maxPct = Math.min(0.12, Math.max(0.008, vol * 0.25));
-      const maxAbs = Math.max(step * 1.5, current * maxPct);
+      // Hard cap ≈ 0.8% per tick (rare memecoin spike); typical << that.
+      const maxPct = Math.min(0.008, Math.max(0.0012, vol * 0.018));
+      const maxAbs = Math.max(step * 1.25, current * maxPct);
       delta = Math.max(-maxAbs, Math.min(maxAbs, delta));
       newPrice = current + delta;
     }
@@ -186,10 +190,10 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
 
     const newMomentum = new Prisma.Decimal(
       Math.max(
-        -0.2,
+        -0.06,
         Math.min(
-          0.2,
-          momentum * 0.65 + ((newPrice - current) / Math.max(current, 0.01)) * 0.35,
+          0.06,
+          momentum * 0.82 + ((newPrice - current) / Math.max(current, 0.01)) * 0.18,
         ),
       ),
     );
