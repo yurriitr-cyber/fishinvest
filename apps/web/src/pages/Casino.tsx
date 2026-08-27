@@ -28,7 +28,7 @@ const CASE_ART: Record<string, string> = {
   TIDE: '/cases/TIDE.jpg',
   REEF: '/cases/REEF.jpg',
   ABYSS: '/cases/ABYSS.jpg',
-  LEVIATHAN: '/cases/LEVIATHAN.jpg',
+  LEVIATHAN: '/cases/LEVIATHAN.jpg?v=2',
 };
 
 function caseArt(code: string) {
