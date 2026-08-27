@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { BannerCarousel } from '../components/BannerCarousel';
+import { MediaSlot } from '../components/MediaSlot';
 import { api, type Fish, type Me } from '../lib/api';
 import {
   fishGlyph,
@@ -8,7 +9,7 @@ import {
   pnlClass,
 } from '../lib/format';
 import { fishName, translateError } from '../lib/labels';
-import { MediaSlot } from '../components/MediaSlot';
+import { useEffect, useState } from 'react';
 
 export function Market({
   me,
@@ -64,7 +65,7 @@ export function Market({
         </div>
       </div>
 
-      <MediaSlot label="Баннер" ratio="21 / 9" />
+      <BannerCarousel />
 
       <div className="ticker" style={{ marginTop: 14 }}>
         <div className="ticker-card">
