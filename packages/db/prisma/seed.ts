@@ -30,7 +30,7 @@ const FISH_SEED: Array<{
   { symbol: 'QKOI', name: 'BLOOP', rarity: FishRarity.EPIC, price: 20.4, supply: 1_250_000, volatility: 0.12, trend: 0.012, hasArt: true },
   { symbol: 'ANGEL', name: 'MOZZI', rarity: FishRarity.EPIC, price: 59.5, supply: 1_000_000, volatility: 0.1, trend: 0.01, hasArt: true },
   { symbol: 'AROWANA', name: 'TWISTY TOOTH', rarity: FishRarity.LEGENDARY, price: 136, supply: 900_000, volatility: 0.08, trend: 0.015, hasArt: true },
-  { symbol: 'EPUFFER', name: 'WHALE', rarity: FishRarity.LEGENDARY, price: 255, supply: 800_000, volatility: 0.065, trend: 0.01, hasArt: true },
+  { symbol: 'EPUFFER', name: 'ELECTRIC EEL', rarity: FishRarity.LEGENDARY, price: 255, supply: 800_000, volatility: 0.065, trend: 0.01, hasArt: true },
   { symbol: 'ASHARK', name: 'DemogorFish', rarity: FishRarity.LEGENDARY, price: 476, supply: 50_000, volatility: 0.055, trend: 0.012, hasArt: true },
   { symbol: 'BDRAGON', name: 'MONSTER', rarity: FishRarity.LEGENDARY, price: 765, supply: 10_000, volatility: 0.045, trend: 0.015, hasArt: true },
   // Top mythics (≥600 ladder): ×3 vs previous seed

@@ -13,7 +13,7 @@ const FISH_NAMES: Record<string, string> = {
   QKOI: 'BLOOP',
   ANGEL: 'MOZZI',
   AROWANA: 'TWISTY TOOTH',
-  EPUFFER: 'WHALE',
+  EPUFFER: 'ELECTRIC EEL',
   ASHARK: 'DemogorFish',
   BDRAGON: 'MONSTER',
   STING: 'STING',
