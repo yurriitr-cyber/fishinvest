@@ -36,16 +36,27 @@ export function Trade({
 }) {
   const [fish, setFish] = useState<Fish | null>(null);
   const [ownedQty, setOwnedQty] = useState(0);
-  const [qty, setQty] = useState('1');
+  const [qty, setQty] = useState('2');
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmSellAll, setConfirmSellAll] = useState(false);
+  const [friends, setFriends] = useState<
+    Array<{ id: string; username: string | null; firstName: string | null }>
+  >([]);
+  const [partnerId, setPartnerId] = useState('');
+  const [jointMode, setJointMode] = useState(false);
+
+  useEffect(() => {
+    api.jointFriends().then(setFriends).catch(() => setFriends([]));
+  }, []);
 
   async function refreshOwned() {
     try {
       const portfolio = await api.portfolio();
-      const position = portfolio.positions.find((p) => p.fishId === fishId);
+      const position = portfolio.positions.find(
+        (p) => p.fishId === fishId && !p.joint,
+      );
       setOwnedQty(Math.floor(Number(position?.quantity ?? 0)) || 0);
     } catch {
       /* keep previous */
@@ -62,7 +73,9 @@ export function Trade({
         ]);
         if (cancelled) return;
         setFish(data);
-        const position = portfolio.positions.find((p) => p.fishId === fishId);
+        const position = portfolio.positions.find(
+          (p) => p.fishId === fishId && !p.joint,
+        );
         setOwnedQty(Math.floor(Number(position?.quantity ?? 0)) || 0);
       } catch (e) {
         if (!cancelled) {
@@ -88,6 +101,34 @@ export function Trade({
 
   async function submit() {
     if (!fish || quantity <= 0) return;
+    if (jointMode && side === 'buy') {
+      if (!partnerId) {
+        setError('Выберите друга для совместной покупки');
+        return;
+      }
+      if (quantity < 2 || quantity % 2 !== 0) {
+        setError('Для покупки вдвоём нужно чётное количество (минимум 2)');
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        await api.jointBuy(partnerId, fish.id, quantity);
+        await hapticNotify('success');
+        notify('Приглашение отправлено другу в Telegram');
+        setJointMode(false);
+      } catch (e) {
+        await hapticNotify('error');
+        setError(
+          translateError(
+            e instanceof Error ? e.message : 'Не удалось пригласить',
+          ),
+        );
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -256,6 +297,48 @@ export function Trade({
             <div className="section-title" style={{ marginTop: 0 }}>
               Количество
             </div>
+            {side === 'buy' && friends.length > 0 && (
+              <div className="joint-box">
+                <button
+                  type="button"
+                  className={`chip ${jointMode ? 'active' : ''}`}
+                  onClick={() => {
+                    setJointMode((v) => !v);
+                    if (!jointMode && quantity % 2 !== 0) setQty('2');
+                  }}
+                >
+                  Купить вместе с другом
+                </button>
+                {jointMode && (
+                  <>
+                    <p className="joint-hint">
+                      50/50. Другу придёт запрос в Telegram — принять или
+                      отклонить. Количество должно быть чётным.
+                    </p>
+                    <select
+                      className="joint-select"
+                      value={partnerId}
+                      onChange={(e) => setPartnerId(e.target.value)}
+                    >
+                      <option value="">Выберите друга</option>
+                      {friends.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.username
+                            ? `@${f.username}`
+                            : f.firstName || 'Друг'}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+            )}
+            {side === 'buy' && friends.length === 0 && (
+              <p className="joint-hint">
+                Пригласите друга во вкладке «Друзья», чтобы покупать активы
+                вдвоём.
+              </p>
+            )}
             <div className="qty-row">
               <input
                 inputMode="numeric"
@@ -264,8 +347,13 @@ export function Trade({
               />
             </div>
             <div className="qty-presets">
-              {['1', '5', '10', '25', '100']
-                .concat(hasOwned ? [String(ownedQty)] : [])
+              {(jointMode && side === 'buy'
+                ? ['2', '4', '10', '20', '100']
+                : ['1', '5', '10', '25', '100']
+              )
+                .concat(
+                  !jointMode && hasOwned ? [String(ownedQty)] : [],
+                )
                 .filter((n, i, arr) => arr.indexOf(n) === i)
                 .map((n) => (
                   <button
@@ -274,7 +362,9 @@ export function Trade({
                     type="button"
                     onClick={() => setQty(n)}
                   >
-                    {n === String(ownedQty) && hasOwned ? 'Всё' : n}
+                    {n === String(ownedQty) && hasOwned && !jointMode
+                      ? 'Всё'
+                      : n}
                   </button>
                 ))}
             </div>
@@ -307,7 +397,9 @@ export function Trade({
                 ? 'Отправка…'
                 : side === 'buy' && soldOut
                   ? 'Распродано'
-                  : `${side === 'buy' ? 'Купить' : 'Продать'} ${fishName(fish.symbol, fish.name)}`}
+                  : jointMode && side === 'buy'
+                    ? `Пригласить · ${formatStars(total / 2, 2)} CR ваша доля`
+                    : `${side === 'buy' ? 'Купить' : 'Продать'} ${fishName(fish.symbol, fish.name)}`}
             </button>
           </div>
         </>

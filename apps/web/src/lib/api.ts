@@ -69,7 +69,40 @@ export type Portfolio = {
     unrealizedPnl: string;
     unrealizedPnlPercent: string;
     realizedPnl: string;
+    joint?: boolean;
+    jointHoldingId?: string | null;
+    partner?: {
+      id: string;
+      username: string | null;
+      firstName: string | null;
+    } | null;
   }>;
+};
+
+export type JointFriend = {
+  id: string;
+  username: string | null;
+  firstName: string | null;
+};
+
+export type JointProposal = {
+  id: string;
+  kind: 'BUY' | 'SELL' | string;
+  status: string;
+  quantity: string;
+  halfAmount: string;
+  unitPrice: string;
+  fish: {
+    symbol: string;
+    name: string;
+    imageUrl: string | null;
+    rarity: string;
+  };
+  initiator: {
+    id: string;
+    username: string | null;
+    firstName: string | null;
+  } | null;
 };
 
 export type Leaderboard = {
@@ -314,4 +347,26 @@ export const api = {
     }),
   casinoOpenings: (limit = 20) =>
     request<CaseOpening[]>(`/casino/openings?limit=${limit}`),
+  jointFriends: () => request<JointFriend[]>('/joint/friends'),
+  jointBuy: (partnerId: string, fishId: string, quantity: number) =>
+    request('/joint/buy', {
+      method: 'POST',
+      body: JSON.stringify({ partnerId, fishId, quantity }),
+    }),
+  jointSell: (holdingId: string) =>
+    request('/joint/sell', {
+      method: 'POST',
+      body: JSON.stringify({ holdingId }),
+    }),
+  jointRespond: (id: string, accept: boolean) =>
+    request(`/joint/${id}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ accept }),
+    }),
+  jointMine: () =>
+    request<{
+      incoming: JointProposal[];
+      outgoing: JointProposal[];
+      holdings: unknown[];
+    }>('/joint/mine'),
 };

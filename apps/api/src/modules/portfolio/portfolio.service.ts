@@ -8,13 +8,30 @@ export class PortfolioService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPortfolio(userId: string) {
-    const [positions, balance] = await Promise.all([
+    const [positions, balance, jointMembers] = await Promise.all([
       this.prisma.db.portfolioPosition.findMany({
         where: { userId },
         include: { fish: true },
         orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.db.gameBalance.findUnique({ where: { userId } }),
+      this.prisma.db.jointHoldingMember.findMany({
+        where: { userId },
+        include: {
+          holding: {
+            include: {
+              fish: true,
+              members: {
+                include: {
+                  user: {
+                    select: { id: true, username: true, firstName: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
     ]);
 
     let totalInvested = new Prisma.Decimal(0);
@@ -46,6 +63,47 @@ export class PortfolioService {
         unrealizedPnl: unrealized.toFixed(4),
         unrealizedPnlPercent: pct.toFixed(4),
         realizedPnl: p.realizedPnl.toFixed(4),
+        joint: false as const,
+        jointHoldingId: null as string | null,
+        partner: null as null,
+      };
+    });
+
+    const jointItems = jointMembers.map((m) => {
+      const h = m.holding;
+      const value = h.fish.currentPrice.mul(m.quantity);
+      const unrealized = value.sub(m.totalInvested);
+      const pct = m.totalInvested.gt(0)
+        ? unrealized.div(m.totalInvested).mul(100)
+        : new Prisma.Decimal(0);
+      const partner = h.members.find((x) => x.userId !== userId);
+
+      totalInvested = totalInvested.add(m.totalInvested);
+      currentValue = currentValue.add(value);
+
+      return {
+        fishId: h.fishId,
+        symbol: h.fish.symbol,
+        name: fishDisplayName(h.fish.symbol, h.fish.name),
+        rarity: h.fish.rarity,
+        imageUrl: h.fish.imageUrl || `/fish/${h.fish.symbol}.jpg`,
+        quantity: m.quantity.toFixed(4),
+        avgBuyPrice: h.avgBuyPrice.toFixed(4),
+        currentPrice: h.fish.currentPrice.toFixed(4),
+        totalInvested: m.totalInvested.toFixed(4),
+        currentValue: value.toFixed(4),
+        unrealizedPnl: unrealized.toFixed(4),
+        unrealizedPnlPercent: pct.toFixed(4),
+        realizedPnl: '0.0000',
+        joint: true as const,
+        jointHoldingId: h.id,
+        partner: partner
+          ? {
+              id: partner.user.id,
+              username: partner.user.username,
+              firstName: partner.user.firstName,
+            }
+          : null,
       };
     });
 
@@ -61,7 +119,7 @@ export class PortfolioService {
       unrealizedPnl: unrealizedPnl.toFixed(4),
       unrealizedPnlPercent: unrealizedPct.toFixed(4),
       realizedPnl: realizedPnl.toFixed(4),
-      positions: items,
+      positions: [...jointItems, ...items],
     };
   }
 

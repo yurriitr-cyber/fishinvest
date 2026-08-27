@@ -14,6 +14,7 @@ import { DepositModule } from './modules/deposit/deposit.module';
 import { OracleModule } from './modules/oracle/oracle.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { CasinoModule } from './modules/casino/casino.module';
+import { JointModule } from './modules/joint/joint.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { HealthController } from './health.controller';
 
@@ -38,6 +39,7 @@ import { HealthController } from './health.controller';
     OracleModule,
     AdminModule,
     CasinoModule,
+    JointModule,
   ],
   controllers: [HealthController],
 })

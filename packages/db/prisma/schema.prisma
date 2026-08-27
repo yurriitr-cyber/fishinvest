@@ -112,6 +112,9 @@ model User {
   referralsReceived      Referral[] @relation("Referred")
   adminActions           AdminAction[]
   caseOpenings           CaseOpening[]
+  jointProposalsInitiated JointProposal[] @relation("JointInitiator")
+  jointProposalsReceived  JointProposal[] @relation("JointPartner")
+  jointMembers            JointHoldingMember[]
 
   @@map("users")
 }
@@ -204,6 +207,8 @@ model Fish {
   marketEvents       MarketEvent[]
   caseRewards        CaseReward[]
   caseOpenings       CaseOpening[]
+  jointHoldings      JointHolding[]
+  jointProposals     JointProposal[]
 
   @@map("fish")
 }
@@ -457,4 +462,77 @@ model CaseOpening {
   @@index([userId, createdAt(sort: Desc)])
   @@index([caseId, createdAt(sort: Desc)])
   @@map("case_openings")
+}
+
+enum JointProposalKind {
+  BUY
+  SELL
+}
+
+enum JointProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+/** Shared stake between exactly two friends. */
+model JointHolding {
+  id            String   @id @default(uuid()) @db.Uuid
+  fishId        String   @map("fish_id") @db.Uuid
+  quantity      Decimal  @db.Decimal(20, 4)
+  avgBuyPrice   Decimal  @map("avg_buy_price") @db.Decimal(20, 4)
+  totalInvested Decimal  @map("total_invested") @db.Decimal(20, 4)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  fish      Fish                 @relation(fields: [fishId], references: [id], onDelete: Cascade)
+  members   JointHoldingMember[]
+  proposals JointProposal[]
+
+  @@index([fishId])
+  @@map("joint_holdings")
+}
+
+model JointHoldingMember {
+  id             String  @id @default(uuid()) @db.Uuid
+  holdingId      String  @map("holding_id") @db.Uuid
+  userId         String  @map("user_id") @db.Uuid
+  quantity       Decimal @db.Decimal(20, 4)
+  totalInvested  Decimal @map("total_invested") @db.Decimal(20, 4)
+
+  holding JointHolding @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([holdingId, userId])
+  @@index([userId])
+  @@map("joint_holding_members")
+}
+
+model JointProposal {
+  id              String              @id @default(uuid()) @db.Uuid
+  kind            JointProposalKind
+  status          JointProposalStatus @default(PENDING)
+  initiatorId     String              @map("initiator_id") @db.Uuid
+  partnerId       String              @map("partner_id") @db.Uuid
+  fishId          String              @map("fish_id") @db.Uuid
+  holdingId       String?             @map("holding_id") @db.Uuid
+  quantity        Decimal             @db.Decimal(20, 4)
+  unitPrice       Decimal             @map("unit_price") @db.Decimal(20, 4)
+  totalAmount     Decimal             @map("total_amount") @db.Decimal(20, 4)
+  partnerAccepted Boolean             @default(false) @map("partner_accepted")
+  telegramMsgId   BigInt?             @map("telegram_msg_id")
+  idempotencyKey  String              @unique @map("idempotency_key")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  resolvedAt      DateTime?           @map("resolved_at")
+
+  initiator User          @relation("JointInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  partner   User          @relation("JointPartner", fields: [partnerId], references: [id], onDelete: Cascade)
+  fish      Fish          @relation(fields: [fishId], references: [id], onDelete: Cascade)
+  holding   JointHolding? @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, status])
+  @@index([initiatorId, status])
+  @@map("joint_proposals")
 }

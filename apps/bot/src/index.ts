@@ -121,6 +121,45 @@ bot.command('help', async (ctx) => {
   );
 });
 
+bot.on('callback_query:data', async (ctx) => {
+  const data = ctx.callbackQuery.data || '';
+  const fromId = ctx.from?.id;
+  if (!fromId) {
+    await ctx.answerCallbackQuery({ text: 'Нет пользователя', show_alert: true });
+    return;
+  }
+
+  const buyAccept = data.match(/^jb_a:(.+)$/);
+  const buyDecline = data.match(/^jb_d:(.+)$/);
+  const sellAccept = data.match(/^js_a:(.+)$/);
+  const sellDecline = data.match(/^js_d:(.+)$/);
+  const match = buyAccept || buyDecline || sellAccept || sellDecline;
+  if (!match) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+
+  const proposalId = match[1];
+  const accept = Boolean(buyAccept || sellAccept);
+
+  try {
+    await apiPost('/joint/internal/respond', {
+      proposalId,
+      telegramUserId: fromId,
+      accept,
+    });
+    await ctx.answerCallbackQuery({
+      text: accept ? 'Принято' : 'Отклонено',
+    });
+  } catch (err) {
+    console.error('joint callback failed', err);
+    await ctx.answerCallbackQuery({
+      text: 'Не удалось обработать. Откройте приложение.',
+      show_alert: true,
+    });
+  }
+});
+
 bot.on('pre_checkout_query', async (ctx) => {
   const q = ctx.preCheckoutQuery;
   const depositId = q.invoice_payload;
