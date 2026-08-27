@@ -51,26 +51,24 @@ export class AdminAuthController {
 
     const configured = getAdminConfiguredSecret();
     if (!configured || configured.length < 8) {
-      throw new UnauthorizedException('Admin secret is not configured on API');
+      throw new UnauthorizedException('Invalid credentials');
     }
     if (!secretsEqual(dto.secret.trim(), configured)) {
-      throw new UnauthorizedException('Invalid admin secret');
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     const adminIds = parseAdminTelegramIds(
       this.config.get<string>('ADMIN_TELEGRAM_IDS'),
     );
     if (!adminIds.includes(String(dto.telegramId))) {
-      throw new ForbiddenException(
-        'Telegram ID is not in ADMIN_TELEGRAM_IDS',
-      );
+      throw new ForbiddenException('Invalid credentials');
     }
 
     const user = await this.prisma.db.user.findUnique({
       where: { telegramId: BigInt(dto.telegramId) },
     });
     if (user?.status === 'BANNED') {
-      throw new ForbiddenException('User is banned');
+      throw new ForbiddenException('Invalid credentials');
     }
 
     const { token, expiresAt } = createAdminSession(dto.telegramId);

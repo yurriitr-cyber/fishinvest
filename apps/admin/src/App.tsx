@@ -70,7 +70,7 @@ function Ocean() {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('dashboard');
-  const [tgId, setTgId] = useState(getDevTelegramId());
+  const [tgId, setTgId] = useState('');
   const [secret, setSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -114,9 +114,7 @@ export default function App() {
     try {
       const me = await adminApi.me();
       if (!me.isAdmin) {
-        throw new Error(
-          'Нет прав админа. Добавьте Telegram ID в ADMIN_TELEGRAM_IDS на API.',
-        );
+        throw new Error('Нет доступа');
       }
       setMeOk(true);
     } catch (e) {
@@ -132,17 +130,18 @@ export default function App() {
     try {
       const id = Number(tgId.trim());
       if (!Number.isFinite(id) || id <= 0) {
-        throw new Error('Укажите корректный Telegram ID');
+        throw new Error('Неверный логин или пароль');
       }
       if (secret.trim().length < 8) {
-        throw new Error('Секрет слишком короткий');
+        throw new Error('Неверный логин или пароль');
       }
       setDevTelegramId(String(id));
       const session = await adminApi.login(id, secret.trim());
       setAdminSession(session.token, session.expiresAt);
       setSessionExp(session.expiresAt);
       setSecret('');
-      setOkMsg('Сессия создана. Секрет больше не хранится в браузере.');
+      setTgId('');
+      setOkMsg('Вход выполнен');
       await boot();
     } catch (e) {
       setMeOk(false);
@@ -157,9 +156,11 @@ export default function App() {
     clearAdminSession();
     setMeOk(false);
     setSessionExp('');
+    setTgId('');
+    setSecret('');
     setDash(null);
     setSelectedUser(null);
-    setOkMsg('Вы вышли из админки');
+    setOkMsg('Вы вышли');
   }
 
   async function loadUsers(query = q) {
@@ -268,30 +269,26 @@ export default function App() {
         <div className="login-wrap">
           <div className="login-card">
             <h1>Rare Fish</h1>
-            <p className="lead">
-              Админ-панель. Вход по Telegram ID из allowlist и секрету API.
-              После входа выдаётся короткая сессия — сырой секрет в браузере не
-              хранится.
-            </p>
+            <p className="lead">Админ-панель</p>
             {error && <div className="toast-error">{error}</div>}
             {okMsg && <div className="toast-ok">{okMsg}</div>}
             <div className="stack">
               <label className="field">
-                <span>Telegram ID</span>
+                <span>Логин</span>
                 <input
                   value={tgId}
                   onChange={(e) => setTgId(e.target.value)}
-                  placeholder="819826046"
+                  placeholder=""
                   autoComplete="username"
                 />
               </label>
               <label className="field">
-                <span>Секрет API (INTERNAL_API_SECRET)</span>
+                <span>Пароль</span>
                 <input
                   type="password"
                   value={secret}
                   onChange={(e) => setSecret(e.target.value)}
-                  placeholder="из Railway → @rare-fish/api"
+                  placeholder=""
                   autoComplete="current-password"
                 />
               </label>
@@ -304,10 +301,6 @@ export default function App() {
                 {busy ? 'Вход…' : 'Войти'}
               </button>
             </div>
-            <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
-              ID должен быть в <code>ADMIN_TELEGRAM_IDS</code>. Секрет — переменная{' '}
-              <code>INTERNAL_API_SECRET</code> или <code>ADMIN_API_SECRET</code>.
-            </p>
           </div>
         </div>
       </>
