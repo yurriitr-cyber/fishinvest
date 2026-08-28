@@ -25,6 +25,7 @@ enum LedgerType {
   CASE_OPEN
   ADMIN_ADJUSTMENT
   FEE
+  PROMO_BONUS
 }
 
 enum DepositStatus {
@@ -112,6 +113,8 @@ model User {
   referralsReceived      Referral[] @relation("Referred")
   adminActions           AdminAction[]
   caseOpenings           CaseOpening[]
+  promoRedemptions       PromoRedemption[]
+  caseCredits            UserCaseCredit[]
   jointProposalsInitiated JointProposal[] @relation("JointInitiator")
   jointProposalsReceived  JointProposal[] @relation("JointPartner")
   jointMembers            JointHoldingMember[]
@@ -207,6 +210,7 @@ model Fish {
   marketEvents       MarketEvent[]
   caseRewards        CaseReward[]
   caseOpenings       CaseOpening[]
+  promoCodes         PromoCode[]
   jointHoldings      JointHolding[]
   jointProposals     JointProposal[]
 
@@ -421,8 +425,10 @@ model LootCase {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  rewards  CaseReward[]
-  openings CaseOpening[]
+  rewards     CaseReward[]
+  openings    CaseOpening[]
+  promoCodes  PromoCode[]
+  caseCredits UserCaseCredit[]
 
   @@map("cases")
 }
@@ -462,6 +468,65 @@ model CaseOpening {
   @@index([userId, createdAt(sort: Desc)])
   @@index([caseId, createdAt(sort: Desc)])
   @@map("case_openings")
+}
+
+enum PromoRewardKind {
+  BALANCE
+  FISH
+  CASE
+}
+
+model PromoCode {
+  id        String          @id @default(uuid()) @db.Uuid
+  code      String          @unique
+  kind      PromoRewardKind
+  amount    Decimal?        @db.Decimal(20, 4)
+  fishId    String?         @map("fish_id") @db.Uuid
+  caseId    String?         @map("case_id") @db.Uuid
+  quantity  Int             @default(1)
+  maxUses   Int?            @map("max_uses")
+  usesCount Int             @default(0) @map("uses_count")
+  expiresAt DateTime?       @map("expires_at")
+  isActive  Boolean         @default(true) @map("is_active")
+  note      String?
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  fish        Fish?              @relation(fields: [fishId], references: [id], onDelete: SetNull)
+  lootCase    LootCase?          @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  redemptions PromoRedemption[]
+
+  @@index([isActive])
+  @@map("promo_codes")
+}
+
+model PromoRedemption {
+  id          String   @id @default(uuid()) @db.Uuid
+  promoCodeId String   @map("promo_code_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("promo_redemptions")
+}
+
+/** Free case opens granted by promo codes. */
+model UserCaseCredit {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  caseId    String   @map("case_id") @db.Uuid
+  remaining Int
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lootCase LootCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, caseId])
+  @@index([userId])
+  @@map("user_case_credits")
 }
 
 enum JointProposalKind {

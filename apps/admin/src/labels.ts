@@ -40,6 +40,7 @@ const LEDGER: Record<string, string> = {
   ADMIN_ADJUSTMENT: 'Корректировка админа',
   FEE: 'Комиссия',
   CASE_OPEN: 'Открытие кейса',
+  PROMO_BONUS: 'Промокод',
 };
 
 const RARITY: Record<string, string> = {

@@ -170,6 +170,17 @@ export const adminApi = {
     request(`/admin/events/${id}/deactivate`, { method: 'POST' }),
   casino: () => request<CasinoStats>('/admin/casino'),
   security: () => request<SecurityOverview>('/admin/security'),
+  promoCodes: () => request<PromoCode[]>('/admin/promo-codes'),
+  createPromo: (data: Record<string, unknown>) =>
+    request<PromoCode>('/admin/promo-codes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  setPromoActive: (id: string, isActive: boolean) =>
+    request<PromoCode>(`/admin/promo-codes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
   broadcastAudience: () =>
     request<{ recipients: number; botConfigured: boolean }>(
       '/admin/broadcast/audience',
@@ -403,4 +414,21 @@ export type SecurityOverview = {
   telegramBotConfigured: boolean;
   rateLimitMax: number;
   sessionAuthEnabled: boolean;
+};
+
+export type PromoCode = {
+  id: string;
+  code: string;
+  kind: 'BALANCE' | 'FISH' | 'CASE';
+  amount: string | null;
+  quantity: number;
+  maxUses: number | null;
+  usesCount: number;
+  redemptions: number;
+  expiresAt: string | null;
+  isActive: boolean;
+  note: string | null;
+  createdAt: string;
+  fish: { id: string; symbol: string; name: string } | null;
+  lootCase: { id: string; code: string; name: string } | null;
 };

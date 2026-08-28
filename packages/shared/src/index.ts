@@ -8,8 +8,10 @@ export enum LedgerType {
   DEPOSIT_CRYPTO = 'DEPOSIT_CRYPTO',
   BUY_FISH = 'BUY_FISH',
   SELL_FISH = 'SELL_FISH',
+  CASE_OPEN = 'CASE_OPEN',
   ADMIN_ADJUSTMENT = 'ADMIN_ADJUSTMENT',
   FEE = 'FEE',
+  PROMO_BONUS = 'PROMO_BONUS',
 }
 
 export enum DepositStatus {

@@ -11,6 +11,7 @@ import {
 import {
   IsArray,
   IsBoolean,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -24,6 +25,7 @@ import { User } from '@rare-fish/db';
 import { AdminUser } from './admin.decorator';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
+import { PromoService } from '../promo/promo.service';
 
 class CreateFishDto {
   @IsString() symbol!: string;
@@ -117,10 +119,57 @@ class DailyTargetsDto {
   durationHours?: number;
 }
 
+class PromoCreateDto {
+  @IsString()
+  @MaxLength(32)
+  code!: string;
+
+  @IsIn(['BALANCE', 'FISH', 'CASE'])
+  kind!: 'BALANCE' | 'FISH' | 'CASE';
+
+  @IsOptional()
+  @IsNumber()
+  amount?: number;
+
+  @IsOptional()
+  @IsUUID()
+  fishId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  caseId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  quantity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxUses?: number;
+
+  @IsOptional()
+  @IsString()
+  expiresAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  note?: string;
+}
+
+class PromoActiveDto {
+  @IsBoolean()
+  isActive!: boolean;
+}
+
 @Controller('admin')
 @UseGuards(AdminGuard)
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly promo: PromoService,
+  ) {}
 
   @Get('dashboard')
   dashboard(): Promise<any> {
@@ -332,5 +381,27 @@ export class AdminController {
   @Get('security')
   security(): Promise<any> {
     return this.admin.securityOverview();
+  }
+
+  @Get('promo-codes')
+  listPromo(): Promise<any> {
+    return this.promo.list();
+  }
+
+  @Post('promo-codes')
+  createPromo(
+    @AdminUser() admin: User,
+    @Body() dto: PromoCreateDto,
+  ): Promise<any> {
+    return this.promo.create(admin, dto);
+  }
+
+  @Patch('promo-codes/:id')
+  patchPromo(
+    @AdminUser() admin: User,
+    @Param('id') id: string,
+    @Body() dto: PromoActiveDto,
+  ): Promise<any> {
+    return this.promo.setActive(admin, id, dto.isActive);
   }
 }

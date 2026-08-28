@@ -15,6 +15,7 @@ import {
   type Fish,
   type MarketEvent,
   type Payment,
+  type PromoCode,
   type SecurityOverview,
 } from './api';
 import { caseName, fishName, ledgerLabel, rarityLabel } from './labels';
@@ -26,6 +27,7 @@ type Tab =
   | 'users'
   | 'broadcast'
   | 'payments'
+  | 'promo'
   | 'deposits'
   | 'events'
   | 'casino'
@@ -40,6 +42,7 @@ const NAV: Array<{ id: Tab; label: string; group?: string }> = [
   { id: 'broadcast', label: 'Рассылка' },
   { id: 'deposits', label: 'Депозиты' },
   { id: 'payments', label: 'Платежи', group: 'Экономика' },
+  { id: 'promo', label: 'Промокоды' },
   { id: 'events', label: 'События рынка' },
   { id: 'casino', label: 'Кейсы' },
   { id: 'audit', label: 'Аудит', group: 'Система' },
@@ -131,6 +134,18 @@ export default function App() {
     recipients: number;
     botConfigured: boolean;
   } | null>(null);
+  const [promos, setPromos] = useState<PromoCode[]>([]);
+  const [promoForm, setPromoForm] = useState({
+    code: '',
+    kind: 'BALANCE' as 'BALANCE' | 'FISH' | 'CASE',
+    amount: '100',
+    fishId: '',
+    caseId: '',
+    quantity: '1',
+    maxUses: '',
+    expiresAt: '',
+    note: '',
+  });
 
   const [eventForm, setEventForm] = useState({
     name: '',
@@ -238,6 +253,16 @@ export default function App() {
         if (tab === 'security') setSecurity(await adminApi.security());
         if (tab === 'broadcast') {
           setBroadcastAudience(await adminApi.broadcastAudience());
+        }
+        if (tab === 'promo') {
+          const [codes, fishList, casinoStats] = await Promise.all([
+            adminApi.promoCodes(),
+            adminApi.fish(),
+            adminApi.casino(),
+          ]);
+          setPromos(codes);
+          setFish(fishList);
+          setCasino(casinoStats);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Ошибка загрузки');
@@ -1501,6 +1526,240 @@ export default function App() {
               ))}
               {!deposits.length && <p className="muted">Пока пусто</p>}
             </div>
+          )}
+
+          {tab === 'promo' && (
+            <>
+              <div className="panel">
+                <h2>Новый промокод</h2>
+                <p className="muted" style={{ marginBottom: 12 }}>
+                  Один код — одна награда: баланс, рыба в портфель или
+                  бесплатные открытия кейса. Каждый игрок может активировать
+                  код один раз.
+                </p>
+                <div className="toolbar">
+                  <label className="field">
+                    <span>Код</span>
+                    <input
+                      value={promoForm.code}
+                      onChange={(e) =>
+                        setPromoForm((f) => ({
+                          ...f,
+                          code: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      placeholder="SUMMER100"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Награда</span>
+                    <select
+                      value={promoForm.kind}
+                      onChange={(e) =>
+                        setPromoForm((f) => ({
+                          ...f,
+                          kind: e.target.value as typeof f.kind,
+                        }))
+                      }
+                    >
+                      <option value="BALANCE">Баланс</option>
+                      <option value="FISH">Рыба</option>
+                      <option value="CASE">Кейс</option>
+                    </select>
+                  </label>
+                  {promoForm.kind === 'BALANCE' ? (
+                    <label className="field">
+                      <span>Сумма CR</span>
+                      <input
+                        value={promoForm.amount}
+                        onChange={(e) =>
+                          setPromoForm((f) => ({ ...f, amount: e.target.value }))
+                        }
+                      />
+                    </label>
+                  ) : null}
+                  {promoForm.kind === 'FISH' ? (
+                    <label className="field">
+                      <span>Рыба</span>
+                      <select
+                        value={promoForm.fishId}
+                        onChange={(e) =>
+                          setPromoForm((f) => ({ ...f, fishId: e.target.value }))
+                        }
+                      >
+                        <option value="">Выберите</option>
+                        {fish.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {fishName(f.symbol, f.name)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {promoForm.kind === 'CASE' ? (
+                    <label className="field">
+                      <span>Кейс</span>
+                      <select
+                        value={promoForm.caseId}
+                        onChange={(e) =>
+                          setPromoForm((f) => ({ ...f, caseId: e.target.value }))
+                        }
+                      >
+                        <option value="">Выберите</option>
+                        {(casino?.cases || [])
+                          .filter((c) => c.code !== 'DAILY')
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {caseName(c.code, c.displayName || c.name)}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {promoForm.kind !== 'BALANCE' ? (
+                    <label className="field">
+                      <span>Количество</span>
+                      <input
+                        value={promoForm.quantity}
+                        onChange={(e) =>
+                          setPromoForm((f) => ({
+                            ...f,
+                            quantity: e.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  ) : null}
+                </div>
+                <div className="toolbar">
+                  <label className="field">
+                    <span>Лимит активаций (пусто = без лимита)</span>
+                    <input
+                      value={promoForm.maxUses}
+                      onChange={(e) =>
+                        setPromoForm((f) => ({ ...f, maxUses: e.target.value }))
+                      }
+                      placeholder="∞"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Действует до (опц.)</span>
+                    <input
+                      type="datetime-local"
+                      value={promoForm.expiresAt}
+                      onChange={(e) =>
+                        setPromoForm((f) => ({
+                          ...f,
+                          expiresAt: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Заметка</span>
+                    <input
+                      value={promoForm.note}
+                      onChange={(e) =>
+                        setPromoForm((f) => ({ ...f, note: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!promoForm.code.trim()) {
+                        setError('Введите код');
+                        return;
+                      }
+                      setBusy(true);
+                      setError(null);
+                      setOkMsg(null);
+                      try {
+                        const payload: Record<string, unknown> = {
+                          code: promoForm.code.trim(),
+                          kind: promoForm.kind,
+                          quantity: Number(promoForm.quantity) || 1,
+                          note: promoForm.note.trim() || undefined,
+                          maxUses: promoForm.maxUses
+                            ? Number(promoForm.maxUses)
+                            : undefined,
+                          expiresAt: promoForm.expiresAt
+                            ? new Date(promoForm.expiresAt).toISOString()
+                            : undefined,
+                        };
+                        if (promoForm.kind === 'BALANCE') {
+                          payload.amount = Number(promoForm.amount);
+                        }
+                        if (promoForm.kind === 'FISH') payload.fishId = promoForm.fishId;
+                        if (promoForm.kind === 'CASE') payload.caseId = promoForm.caseId;
+                        await adminApi.createPromo(payload);
+                        setOkMsg('Промокод создан');
+                        setPromoForm((f) => ({ ...f, code: '', note: '' }));
+                        setPromos(await adminApi.promoCodes());
+                      } catch (e) {
+                        setError(
+                          e instanceof Error ? e.message : 'Не удалось создать',
+                        );
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Создать
+                  </button>
+                </div>
+              </div>
+              <div className="panel">
+                <h2>Коды</h2>
+                {promos.map((p) => (
+                  <div key={p.id} className="row">
+                    <div>
+                      <div className="mono">{p.code}</div>
+                      <div className="muted">
+                        {p.kind === 'BALANCE'
+                          ? `+${n(p.amount, 2)} CR`
+                          : p.kind === 'FISH'
+                            ? `${p.fish?.name || 'рыба'} × ${p.quantity}`
+                            : `${p.lootCase?.name || 'кейс'} × ${p.quantity}`}
+                        {p.note ? ` · ${p.note}` : ''}
+                      </div>
+                    </div>
+                    <div className="mono">
+                      {p.usesCount}
+                      {p.maxUses != null ? ` / ${p.maxUses}` : ''}
+                    </div>
+                    <div className="muted">
+                      {p.isActive ? 'активен' : 'выключен'}
+                      {p.expiresAt ? ` · до ${when(p.expiresAt)}` : ''}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        setError(null);
+                        try {
+                          await adminApi.setPromoActive(p.id, !p.isActive);
+                          setPromos(await adminApi.promoCodes());
+                        } catch (e) {
+                          setError(
+                            e instanceof Error ? e.message : 'Ошибка',
+                          );
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      {p.isActive ? 'Выключить' : 'Включить'}
+                    </button>
+                  </div>
+                ))}
+                {!promos.length && <p className="muted">Пока нет кодов</p>}
+              </div>
+            </>
           )}
 
           {tab === 'events' && (

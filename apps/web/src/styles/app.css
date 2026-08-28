@@ -218,7 +218,8 @@ button {
 .deposit-method,
 .bonus-chip,
 .toast,
-.media-slot {
+.media-slot,
+.promo-bar {
   position: relative;
   isolation: isolate;
   background:
@@ -1714,6 +1715,36 @@ button {
   color: var(--tier, var(--accent));
 }
 
+.promo-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+}
+
+.promo-bar input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(2, 14, 24, 0.55);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  padding: 11px 12px;
+  outline: none;
+}
+
+.promo-bar input:focus {
+  border-color: rgba(70, 214, 230, 0.55);
+  box-shadow: 0 0 0 3px rgba(70, 214, 230, 0.12);
+}
+
+.promo-bar .btn {
+  flex-shrink: 0;
+  min-height: 42px;
+  padding: 0 16px;
+}
+
 .media-slot.crate {
   width: 100%;
   aspect-ratio: 1;
@@ -2307,6 +2338,7 @@ button {
   .bonus-chip,
   .toast,
   .media-slot,
+  .promo-bar,
   .nav,
   .chip {
     background: linear-gradient(158deg, rgba(24, 66, 96, 0.95), rgba(6, 26, 43, 0.95));

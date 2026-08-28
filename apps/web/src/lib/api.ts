@@ -161,6 +161,7 @@ export type LootCase = {
   isFreeDaily?: boolean;
   canOpenFree?: boolean;
   nextFreeAt?: string | null;
+  freeCredits?: number;
   loot: CaseLootItem[];
 };
 
@@ -357,6 +358,11 @@ export const api = {
     }),
   casinoOpenings: (limit = 20) =>
     request<CaseOpening[]>(`/casino/openings?limit=${limit}`),
+  redeemPromo: (code: string) =>
+    request<{ ok: boolean; kind: string; message: string }>('/promo/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
   jointFriends: () => request<JointFriend[]>('/joint/friends'),
   jointBuy: (
     partnerId: string | undefined,

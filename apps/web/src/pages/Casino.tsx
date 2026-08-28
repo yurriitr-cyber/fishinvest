@@ -109,18 +109,22 @@ export function Casino({
   const [offset, setOffset] = useState(0);
   const [sliding, setSliding] = useState(false);
   const [reveal, setReveal] = useState<CaseOpening | null>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoBusy, setPromoBusy] = useState(false);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
 
   const selected = cases.find((c) => c.id === selectedId) || null;
   const balance = Number(me.balance);
+  const promoOpens = selected?.freeCredits ?? 0;
   const freeReady =
     !selected?.isFreeDaily || selected.canOpenFree !== false;
   const canAfford =
     !!selected &&
-    freeReady &&
-    (selected.isFreeDaily || balance >= Number(selected.priceCredits));
+    (promoOpens > 0 ||
+      (freeReady &&
+        (selected.isFreeDaily || balance >= Number(selected.priceCredits))));
 
   function freeCountdown(iso: string | null | undefined) {
     if (!iso) return null;
@@ -205,6 +209,27 @@ export function Casino({
     );
   }
 
+  async function applyPromo() {
+    const code = promoCode.trim();
+    if (!code || promoBusy || busy) return;
+    setPromoBusy(true);
+    setError(null);
+    try {
+      const res = await api.redeemPromo(code);
+      setPromoCode('');
+      notify(res.message);
+      void hapticNotify('success');
+      await Promise.all([load(), onOpened()]);
+    } catch (e) {
+      setError(
+        translateError(e instanceof Error ? e.message : 'Не удалось применить'),
+      );
+      void hapticNotify('error');
+    } finally {
+      setPromoBusy(false);
+    }
+  }
+
   async function openSelected() {
     if (!selected || busy) return;
     if (selected.isFreeDaily && selected.canOpenFree === false) {
@@ -214,7 +239,8 @@ export function Casino({
       return;
     }
     const cost = Number(selected.priceCredits);
-    if (!selected.isFreeDaily && balance < cost) {
+    const hasCredit = (selected.freeCredits ?? 0) > 0;
+    if (!selected.isFreeDaily && !hasCredit && balance < cost) {
       setError(
         `Нужно ${formatCredits(cost)} CR — пополните баланс или продайте рыбу`,
       );
@@ -312,10 +338,10 @@ export function Casino({
       <div className="case-rail">
         {cases.map((c, i) => {
           const freeLocked = c.isFreeDaily && c.canOpenFree === false;
+          const credits = c.freeCredits ?? 0;
           const affordable =
-            c.isFreeDaily
-              ? !freeLocked
-              : balance >= Number(c.priceCredits);
+            credits > 0 ||
+            (c.isFreeDaily ? !freeLocked : balance >= Number(c.priceCredits));
           const wait = freeLocked ? freeCountdown(c.nextFreeAt) : null;
           return (
             <button
@@ -343,11 +369,35 @@ export function Casino({
                   ? wait
                     ? `через ${wait}`
                     : 'Бесплатно'
-                  : `${formatCredits(c.priceCredits)} CR`}
+                  : credits > 0
+                    ? `${credits} бесплатно`
+                    : `${formatCredits(c.priceCredits)} CR`}
               </div>
             </button>
           );
         })}
+      </div>
+
+      <div className="promo-bar">
+        <input
+          value={promoCode}
+          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+          placeholder="Промокод"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          disabled={promoBusy || busy}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void applyPromo();
+          }}
+        />
+        <button
+          className="btn btn-solid"
+          type="button"
+          disabled={promoBusy || busy || !promoCode.trim()}
+          onClick={() => void applyPromo()}
+        >
+          {promoBusy ? '…' : 'Применить'}
+        </button>
       </div>
 
       {selected && (
@@ -447,10 +497,14 @@ export function Casino({
                   : reveal
                     ? selected.isFreeDaily
                       ? 'Открыто · следующий через 24 ч'
-                      : `Открыть ещё · ${formatCredits(selected.priceCredits)} CR`
+                      : promoOpens > 0
+                        ? `Открыть ещё · бесплатно (${promoOpens})`
+                        : `Открыть ещё · ${formatCredits(selected.priceCredits)} CR`
                     : selected.isFreeDaily
                       ? 'Открыть бесплатно'
-                      : `Открыть кейс · ${formatCredits(selected.priceCredits)} CR`}
+                      : promoOpens > 0
+                        ? `Открыть бесплатно · ${promoOpens}`
+                        : `Открыть кейс · ${formatCredits(selected.priceCredits)} CR`}
           </button>
 
           <div className="case-footer">
