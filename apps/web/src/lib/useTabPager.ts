@@ -65,13 +65,13 @@ export function useTabPager({
     if (!track || !viewport) return;
     const width = viewport.clientWidth || 1;
     const last = TABS.length - 1;
-    let x = -index * width + dx;
-    if (index === 0 && dx > 0) x = dx * RUBBER;
-    if (index === last && dx < 0) x = -index * width + dx * RUBBER;
+    let x = -index * width - dx;
+    if (index === 0 && dx < 0) x = -dx * RUBBER;
+    if (index === last && dx > 0) x = -index * width - dx * RUBBER;
     track.style.transition = animate ? EASE : 'none';
     track.style.transform = `translate3d(${x}px, 0, 0)`;
     track.style.willChange = dx !== 0 ? 'transform' : '';
-    const progress = Math.min(last, Math.max(0, index - dx / width));
+    const progress = Math.min(last, Math.max(0, index + dx / width));
     if (thumb) {
       thumb.style.transition = animate ? EASE : 'none';
       thumb.style.transform = `translate3d(calc(${progress} * (100% + 2px)), 0, 0)`;
@@ -187,8 +187,8 @@ export function useTabPager({
       const width = viewport.clientWidth || 1;
       const last = TABS.length - 1;
       let next = index;
-      if (vx < -VEL || dx < -width * SNAP) next = index + 1;
-      else if (vx > VEL || dx > width * SNAP) next = index - 1;
+      if (vx > VEL || dx > width * SNAP) next = index + 1;
+      else if (vx < -VEL || dx < -width * SNAP) next = index - 1;
       next = Math.min(last, Math.max(0, next));
       if (Math.abs(dx) > LOCK_PX) {
         window.addEventListener('click', blockClick, true);

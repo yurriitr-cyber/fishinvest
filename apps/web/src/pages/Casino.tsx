@@ -187,7 +187,16 @@ export function Casino({
 
   function selectCase(id: string, tile?: HTMLElement) {
     if (busy) return;
-    tile?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    const rail = tile?.closest('.case-rail');
+    if (rail instanceof HTMLElement && tile) {
+      const tileRect = tile.getBoundingClientRect();
+      const railRect = rail.getBoundingClientRect();
+      const delta =
+        tileRect.left +
+        tileRect.width / 2 -
+        (railRect.left + railRect.width / 2);
+      rail.scrollBy({ left: delta, behavior: 'smooth' });
+    }
     clearTimers();
     setSelectedId(id);
     setReveal(null);

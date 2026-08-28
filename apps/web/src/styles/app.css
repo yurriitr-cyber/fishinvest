@@ -201,7 +201,7 @@ html.is-paging .ocean-caustics {
   flex: 0 0 100%;
   width: 100%;
   height: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -1937,6 +1937,7 @@ html.is-paging .ocean-caustics {
     rgba(2, 14, 24, 0.55);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   overflow: hidden;
+  isolation: isolate;
   transition: box-shadow 300ms ease, border-color 300ms ease;
 }
 
@@ -1953,6 +1954,8 @@ html.is-paging .ocean-caustics {
 }
 
 .reel-viewport {
+  position: relative;
+  z-index: 0;
   overflow: hidden;
   touch-action: pan-x;
   padding: 14px 0;
@@ -2013,6 +2016,7 @@ html.is-paging .ocean-caustics {
     transparent 70%
   );
   animation: reel-flash 520ms ease-out forwards;
+  z-index: 1;
 }
 
 @keyframes reel-flash {
@@ -2039,6 +2043,8 @@ html.is-paging .ocean-caustics {
 }
 
 .reel-cell {
+  position: relative;
+  z-index: 0;
   flex: 0 0 112px;
   width: 112px;
   padding: 8px 6px 9px;
@@ -2122,6 +2128,7 @@ html.is-paging .ocean-caustics {
 /* Centre needle the winning cell stops under. */
 .reel-marker {
   position: absolute;
+  z-index: 8;
   top: 0;
   bottom: 0;
   left: 50%;
