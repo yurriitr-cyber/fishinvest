@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, type Me } from './lib/api';
 import { translateError } from './lib/labels';
 import { useTabPager } from './lib/useTabPager';
-import { BottomNav, type Tab } from './components/BottomNav';
+import { BottomNav, TABS, type Tab } from './components/BottomNav';
 import { Welcome } from './pages/Welcome';
 import { Market } from './pages/Market';
 import { Trade } from './pages/Trade';
@@ -10,6 +10,10 @@ import { PortfolioPage } from './pages/Portfolio';
 import { Deposit } from './pages/Deposit';
 import { Casino } from './pages/Casino';
 import { Referrals } from './pages/Referrals';
+
+function nearTab(current: Tab, id: Tab) {
+  return Math.abs(TABS.indexOf(current) - TABS.indexOf(id)) <= 1;
+}
 
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -19,7 +23,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [navTab, setNavTab] = useState<Tab>('market');
   const pagerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLSpanElement>(null);
@@ -27,7 +30,6 @@ export default function App() {
   const goTab = useCallback((next: Tab) => {
     setSelectedFishId(null);
     setTab(next);
-    setNavTab(next);
   }, []);
 
   const showPager = !showWelcome && !loading && !!me && !error;
@@ -36,17 +38,16 @@ export default function App() {
     enabled: showPager && !selectedFishId,
     tab,
     onChange: goTab,
-    onHint: setNavTab,
     viewportRef: pagerRef,
     trackRef,
     thumbRef,
   });
 
-  async function refreshMe() {
+  const refreshMe = useCallback(async () => {
     const data = await api.me();
     setMe(data);
     return data;
-  }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +71,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshMe]);
 
   useEffect(() => {
     if (!toast) return;
@@ -78,14 +79,49 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  function notify(message: string) {
+  const notify = useCallback((message: string) => {
     setToast(message);
-  }
+  }, []);
 
-  async function onTraded() {
+  const onSelectFish = useCallback((id: string) => {
+    setSelectedFishId(id);
+  }, []);
+
+  const onTraded = useCallback(async () => {
     await refreshMe();
     notify('Сделка исполнена');
-  }
+  }, [notify, refreshMe]);
+
+  const onSold = useCallback(async () => {
+    await refreshMe();
+  }, [refreshMe]);
+
+  const onCredited = useCallback(async () => {
+    await refreshMe();
+    notify('Депозит подтверждён. Кредиты зачислены.');
+  }, [notify, refreshMe]);
+
+  const onOpened = useCallback(async () => {
+    await refreshMe();
+  }, [refreshMe]);
+
+  const pages = useMemo(() => {
+    if (!me) return null;
+    return {
+      market: <Market me={me} onSelectFish={onSelectFish} />,
+      portfolio: (
+        <PortfolioPage
+          me={me}
+          onSelectFish={onSelectFish}
+          onSold={onSold}
+          notify={notify}
+        />
+      ),
+      deposit: <Deposit me={me} onCredited={onCredited} />,
+      casino: <Casino me={me} onOpened={onOpened} notify={notify} />,
+      invite: <Referrals me={me} notify={notify} />,
+    };
+  }, [me, notify, onCredited, onOpened, onSelectFish, onSold]);
 
   let body: ReactNode = null;
 
@@ -142,55 +178,28 @@ export default function App() {
       </div>
       <div className="app-shell">
         {body}
-        {showPager && me && (
+        {showPager && pages && (
           <div
             className="pager"
             ref={pagerRef}
             hidden={!!selectedFishId}
           >
             <div className="pager-track" ref={trackRef}>
-              <div className="pager-page">
-                <Market
-                  me={me}
-                  onSelectFish={(id) => setSelectedFishId(id)}
-                />
-              </div>
-              <div className="pager-page">
-                <PortfolioPage
-                  me={me}
-                  onSelectFish={setSelectedFishId}
-                  onSold={async () => {
-                    await refreshMe();
-                  }}
-                  notify={notify}
-                />
-              </div>
-              <div className="pager-page">
-                <Deposit
-                  me={me}
-                  onCredited={async () => {
-                    await refreshMe();
-                    notify('Депозит подтверждён. Кредиты зачислены.');
-                  }}
-                />
-              </div>
-              <div className="pager-page">
-                <Casino
-                  me={me}
-                  onOpened={async () => {
-                    await refreshMe();
-                  }}
-                  notify={notify}
-                />
-              </div>
-              <div className="pager-page">
-                <Referrals me={me} notify={notify} />
-              </div>
+              {TABS.map((id) => (
+                <div
+                  key={id}
+                  className={`pager-page${tab === id ? ' is-active' : ''}${
+                    nearTab(tab, id) ? ' is-near' : ''
+                  }`}
+                >
+                  {nearTab(tab, id) ? pages[id] : null}
+                </div>
+              ))}
             </div>
           </div>
         )}
         {showPager && (
-          <BottomNav tab={navTab} onChange={goTab} thumbRef={thumbRef} />
+          <BottomNav tab={tab} onChange={goTab} thumbRef={thumbRef} />
         )}
         {toast && <div className="toast">{toast}</div>}
       </div>

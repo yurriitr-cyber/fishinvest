@@ -160,6 +160,11 @@ button {
   }
 }
 
+html.is-paging .ocean-rays,
+html.is-paging .ocean-caustics {
+  animation-play-state: paused;
+}
+
 /* ——————————————————————————————
    Shell
    —————————————————————————————— */
@@ -190,7 +195,6 @@ button {
 .pager-track {
   display: flex;
   height: 100%;
-  will-change: transform;
 }
 
 .pager-page {
@@ -201,6 +205,18 @@ button {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 100% 100%;
+  pointer-events: none;
+}
+
+.pager-page.is-active {
+  pointer-events: auto;
+}
+
+.pager-page.is-near {
+  content-visibility: visible;
 }
 
 .pager-page .screen {

@@ -27,11 +27,18 @@ function isSwipeBlocked(target: EventTarget | null) {
   return false;
 }
 
+function syncNav(thumb: HTMLElement | null, hint: Tab) {
+  const nav = thumb?.closest('.nav');
+  if (!nav) return;
+  nav.querySelectorAll('.nav-items button').forEach((btn, i) => {
+    btn.classList.toggle('active', TABS[i] === hint);
+  });
+}
+
 export function useTabPager({
   enabled,
   tab,
   onChange,
-  onHint,
   viewportRef,
   trackRef,
   thumbRef,
@@ -39,19 +46,17 @@ export function useTabPager({
   enabled: boolean;
   tab: Tab;
   onChange: (tab: Tab) => void;
-  onHint?: (tab: Tab) => void;
   viewportRef: RefObject<HTMLElement | null>;
   trackRef: RefObject<HTMLElement | null>;
   thumbRef: RefObject<HTMLElement | null>;
 }) {
   const tabRef = useRef(tab);
   const onChangeRef = useRef(onChange);
-  const onHintRef = useRef(onHint);
   const draggingRef = useRef(false);
   const hintRef = useRef(tab);
+  const indexRef = useRef(TABS.indexOf(tab));
   tabRef.current = tab;
   onChangeRef.current = onChange;
-  onHintRef.current = onHint;
 
   const paint = (index: number, dx: number, animate: boolean) => {
     const track = trackRef.current;
@@ -65,32 +70,39 @@ export function useTabPager({
     if (index === last && dx < 0) x = -index * width + dx * RUBBER;
     track.style.transition = animate ? EASE : 'none';
     track.style.transform = `translate3d(${x}px, 0, 0)`;
-    if (!thumb) return;
+    track.style.willChange = dx !== 0 ? 'transform' : '';
     const progress = Math.min(last, Math.max(0, index - dx / width));
-    thumb.style.transition = animate ? EASE : 'none';
-    thumb.style.transform = `translate3d(calc(${progress} * (100% + 2px)), 0, 0)`;
+    if (thumb) {
+      thumb.style.transition = animate ? EASE : 'none';
+      thumb.style.transform = `translate3d(calc(${progress} * (100% + 2px)), 0, 0)`;
+    }
     const hint = TABS[Math.round(progress)] ?? TABS[0];
     if (hint !== hintRef.current) {
       hintRef.current = hint;
-      onHintRef.current?.(hint);
+      syncNav(thumb, hint);
     }
   };
 
   useLayoutEffect(() => {
     if (!enabled || draggingRef.current) return;
-    paint(TABS.indexOf(tab), 0, false);
+    indexRef.current = TABS.indexOf(tab);
+    paint(indexRef.current, 0, false);
   }, [enabled]);
 
   useEffect(() => {
     if (!enabled || draggingRef.current) return;
-    paint(TABS.indexOf(tab), 0, true);
+    const next = TABS.indexOf(tab);
+    const prev = indexRef.current;
+    indexRef.current = next;
+    paint(next, 0, Math.abs(next - prev) <= 1);
   }, [enabled, tab]);
 
   useEffect(() => {
     if (!enabled) return;
-    const root = viewportRef.current?.closest('.app-shell') ?? viewportRef.current;
     const viewport = viewportRef.current;
-    if (!root || !viewport) return;
+    const shell = viewport?.closest('.app-shell');
+    if (!viewport || !(shell instanceof HTMLElement)) return;
+    const root = shell;
 
     let tracking = false;
     let axis: 'h' | 'v' | null = null;
@@ -112,6 +124,7 @@ export function useTabPager({
       tracking = false;
       axis = null;
       draggingRef.current = false;
+      document.documentElement.classList.remove('is-paging');
       try {
         if (root.hasPointerCapture(id)) root.releasePointerCapture(id);
       } catch {
@@ -119,7 +132,8 @@ export function useTabPager({
       }
     };
 
-    const onDown = (e: PointerEvent) => {
+    const onDown = (event: Event) => {
+      const e = event as PointerEvent;
       if (!e.isPrimary) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (isSwipeBlocked(e.target)) return;
@@ -133,7 +147,8 @@ export function useTabPager({
       index = TABS.indexOf(tabRef.current);
     };
 
-    const onMove = (e: PointerEvent) => {
+    const onMove = (event: Event) => {
+      const e = event as PointerEvent;
       if (!tracking || e.pointerId !== pointerId) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
@@ -142,6 +157,7 @@ export function useTabPager({
         axis = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'h' : 'v';
         if (axis === 'h') {
           draggingRef.current = true;
+          document.documentElement.classList.add('is-paging');
           try {
             root.setPointerCapture(e.pointerId);
           } catch {
@@ -161,7 +177,8 @@ export function useTabPager({
       paint(index, dx, false);
     };
 
-    const onUp = (e: PointerEvent) => {
+    const onUp = (event: Event) => {
+      const e = event as PointerEvent;
       if (!tracking || e.pointerId !== pointerId) return;
       const dx = e.clientX - startX;
       const wasHorizontal = axis === 'h';
@@ -175,8 +192,12 @@ export function useTabPager({
       next = Math.min(last, Math.max(0, next));
       if (Math.abs(dx) > LOCK_PX) {
         window.addEventListener('click', blockClick, true);
-        window.setTimeout(() => window.removeEventListener('click', blockClick, true), 400);
+        window.setTimeout(
+          () => window.removeEventListener('click', blockClick, true),
+          400,
+        );
       }
+      indexRef.current = next;
       paint(next, 0, true);
       if (TABS[next] !== tabRef.current) {
         onChangeRef.current(TABS[next]);
@@ -195,6 +216,7 @@ export function useTabPager({
     root.addEventListener('pointercancel', onUp);
     window.addEventListener('resize', onResize);
     return () => {
+      document.documentElement.classList.remove('is-paging');
       root.removeEventListener('pointerdown', onDown);
       root.removeEventListener('pointermove', onMove);
       root.removeEventListener('pointerup', onUp);
