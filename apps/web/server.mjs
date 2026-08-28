@@ -237,6 +237,6 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`Mini App listening on :${port}`);
   console.log(`API_PROXY_TARGET=${apiTarget}`);
   console.log(
-    `Admin UI: ${existsSync(adminIndex) ? 'ready at /admin/' : 'MISSING (check Docker build)'}`,
+    `Admin UI: ${existsSync(adminIndex) ? 'ready at /admin/ (broadcast)' : 'MISSING (check Docker build)'}`,
   );
 });
