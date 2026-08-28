@@ -383,15 +383,18 @@ export function Casino({
           value={promoCode}
           onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
           placeholder="Промокод"
+          aria-label="Промокод"
           autoCapitalize="characters"
           autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="done"
           disabled={promoBusy || busy}
           onKeyDown={(e) => {
             if (e.key === 'Enter') void applyPromo();
           }}
         />
         <button
-          className="btn btn-solid"
+          className="promo-apply"
           type="button"
           disabled={promoBusy || busy || !promoCode.trim()}
           onClick={() => void applyPromo()}
