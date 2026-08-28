@@ -15,6 +15,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -77,6 +78,27 @@ class GiftFishDto {
 
 class BanDto {
   @IsOptional() @IsString() reason?: string;
+}
+
+class BroadcastDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(4096)
+  message?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(8_000_000)
+  photoBase64?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  photoFilename?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  test?: boolean;
 }
 
 class DailyTargetItemDto {
@@ -282,6 +304,24 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<any> {
     return this.admin.setEventActive(admin, id, false);
+  }
+
+  @Get('broadcast/audience')
+  broadcastAudience(): Promise<any> {
+    return this.admin.broadcastAudience();
+  }
+
+  @Post('broadcast')
+  broadcast(
+    @AdminUser() admin: User,
+    @Body() dto: BroadcastDto,
+  ): Promise<any> {
+    return this.admin.broadcast(admin, {
+      message: dto.message,
+      photoBase64: dto.photoBase64,
+      photoFilename: dto.photoFilename,
+      test: dto.test,
+    });
   }
 
   @Get('casino')

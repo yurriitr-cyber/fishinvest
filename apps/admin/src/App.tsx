@@ -24,6 +24,7 @@ type Tab =
   | 'targets'
   | 'fish'
   | 'users'
+  | 'broadcast'
   | 'payments'
   | 'deposits'
   | 'events'
@@ -36,6 +37,7 @@ const NAV: Array<{ id: Tab; label: string; group?: string }> = [
   { id: 'targets', label: 'Рампа 24ч' },
   { id: 'fish', label: 'Цены / фриз' },
   { id: 'users', label: 'Пользователи', group: 'Люди' },
+  { id: 'broadcast', label: 'Рассылка' },
   { id: 'deposits', label: 'Депозиты' },
   { id: 'payments', label: 'Платежи', group: 'Экономика' },
   { id: 'events', label: 'События рынка' },
@@ -122,6 +124,13 @@ export default function App() {
   );
   const [giftFishId, setGiftFishId] = useState('');
   const [giftQty, setGiftQty] = useState('1');
+  const [broadcastText, setBroadcastText] = useState('');
+  const [broadcastFile, setBroadcastFile] = useState<File | null>(null);
+  const [broadcastPreview, setBroadcastPreview] = useState<string | null>(null);
+  const [broadcastAudience, setBroadcastAudience] = useState<{
+    recipients: number;
+    botConfigured: boolean;
+  } | null>(null);
 
   const [eventForm, setEventForm] = useState({
     name: '',
@@ -227,6 +236,9 @@ export default function App() {
         if (tab === 'events') setEvents(await adminApi.events());
         if (tab === 'casino') setCasino(await adminApi.casino());
         if (tab === 'security') setSecurity(await adminApi.security());
+        if (tab === 'broadcast') {
+          setBroadcastAudience(await adminApi.broadcastAudience());
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Ошибка загрузки');
       }
@@ -252,6 +264,63 @@ export default function App() {
     }, 5000);
     return () => clearInterval(id);
   }, [meOk, tab]);
+
+  function readFileBase64(file: File) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const s = String(reader.result || '');
+        const comma = s.indexOf(',');
+        resolve(comma >= 0 ? s.slice(comma + 1) : s);
+      };
+      reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function sendBroadcast(test: boolean) {
+    const text = broadcastText.trim();
+    if (!text && !broadcastFile) {
+      setError('Введите текст или прикрепите фото');
+      return;
+    }
+    if (!test) {
+      const nRecipients = broadcastAudience?.recipients ?? 0;
+      if (
+        !window.confirm(
+          `Отправить ${nRecipients} пользователям? Это уйдёт всем в бот.`,
+        )
+      ) {
+        return;
+      }
+    }
+    setBusy(true);
+    setError(null);
+    setOkMsg(null);
+    try {
+      const photoBase64 = broadcastFile
+        ? await readFileBase64(broadcastFile)
+        : undefined;
+      const res = await adminApi.broadcast({
+        message: text || undefined,
+        photoBase64,
+        photoFilename: broadcastFile?.name,
+        test,
+      });
+      const bits = [
+        test ? 'Тест себе' : 'Рассылка',
+        `доставлено ${res.sent} из ${res.recipients}`,
+      ];
+      if (res.blocked) bits.push(`заблокировали бота: ${res.blocked}`);
+      if (res.failed) bits.push(`ошибок: ${res.failed}`);
+      setOkMsg(bits.join(' · '));
+      setBroadcastAudience(await adminApi.broadcastAudience());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось отправить');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function saveAllTargets() {
     setBusy(true);
@@ -1209,6 +1278,109 @@ export default function App() {
                 </div>
               )}
             </>
+          )}
+
+          {tab === 'broadcast' && (
+            <div className="panel">
+              <h2>Рассылка в бот</h2>
+              <p className="muted" style={{ marginBottom: 14 }}>
+                Сообщение уйдёт всем, кто открывал приложение и не блокировал
+                бота. Сначала лучше нажать «Отправить себе». Забаненные не
+                получают.
+              </p>
+              <div className="grid-stats" style={{ marginBottom: 16 }}>
+                <div className="stat">
+                  <div className="label">Получателей</div>
+                  <div className="value">
+                    {n(broadcastAudience?.recipients ?? 0, 0)}
+                  </div>
+                </div>
+                <div className="stat">
+                  <div className="label">Бот</div>
+                  <div className="value" style={{ fontSize: 18 }}>
+                    {broadcastAudience?.botConfigured ? 'готов' : 'нет токена'}
+                  </div>
+                </div>
+              </div>
+              <label className="field" style={{ marginBottom: 14 }}>
+                <span>Текст</span>
+                <textarea
+                  rows={7}
+                  value={broadcastText}
+                  maxLength={4096}
+                  placeholder="Что написать в боте…"
+                  onChange={(e) => setBroadcastText(e.target.value)}
+                />
+                <span className="dim">
+                  {broadcastText.trim().length}/4096
+                  {broadcastFile ? ' · с фото подпись до 1024 символов' : ''}
+                </span>
+              </label>
+              <div className="file-row">
+                <label className="field" style={{ flex: '1 1 220px' }}>
+                  <span>Фото (необязательно)</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      if (broadcastPreview) URL.revokeObjectURL(broadcastPreview);
+                      if (!file) {
+                        setBroadcastFile(null);
+                        setBroadcastPreview(null);
+                        return;
+                      }
+                      if (file.size > 4 * 1024 * 1024) {
+                        setError('Фото должно быть до 4 МБ');
+                        e.target.value = '';
+                        return;
+                      }
+                      setError(null);
+                      setBroadcastFile(file);
+                      setBroadcastPreview(URL.createObjectURL(file));
+                    }}
+                  />
+                </label>
+                {broadcastPreview ? (
+                  <div className="photo-preview-wrap">
+                    <img
+                      className="photo-preview"
+                      src={broadcastPreview}
+                      alt="Превью"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => {
+                        if (broadcastPreview) URL.revokeObjectURL(broadcastPreview);
+                        setBroadcastFile(null);
+                        setBroadcastPreview(null);
+                      }}
+                    >
+                      Убрать фото
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="toolbar" style={{ marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={busy}
+                  onClick={() => void sendBroadcast(true)}
+                >
+                  Отправить себе
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={busy}
+                  onClick={() => void sendBroadcast(false)}
+                >
+                  {busy ? 'Отправка…' : 'Отправить всем'}
+                </button>
+              </div>
+            </div>
           )}
 
           {tab === 'payments' && (

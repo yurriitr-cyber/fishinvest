@@ -170,6 +170,27 @@ export const adminApi = {
     request(`/admin/events/${id}/deactivate`, { method: 'POST' }),
   casino: () => request<CasinoStats>('/admin/casino'),
   security: () => request<SecurityOverview>('/admin/security'),
+  broadcastAudience: () =>
+    request<{ recipients: number; botConfigured: boolean }>(
+      '/admin/broadcast/audience',
+    ),
+  broadcast: (data: {
+    message?: string;
+    photoBase64?: string;
+    photoFilename?: string;
+    test?: boolean;
+  }) =>
+    request<{
+      recipients: number;
+      sent: number;
+      blocked: number;
+      failed: number;
+      test: boolean;
+      hasPhoto: boolean;
+    }>('/admin/broadcast', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   oracles: () =>
     request<{
       ton: {

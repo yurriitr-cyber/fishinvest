@@ -4,9 +4,46 @@ import { randomUUID } from 'crypto';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OracleService } from '../oracle/oracle.service';
+import { TelegramNotifyService } from '../joint/telegram-notify.service';
 import { getAdminConfiguredSecret } from '../../security/security';
 import { fishDisplayName } from '../fish/fish-names';
 import { caseDisplayName } from '../casino/case-names';
+
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+const TEXT_MAX = 4096;
+const CAPTION_MAX = 1024;
+
+function sniffImage(buf: Buffer): { mime: string; ext: string } | null {
+  if (buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8) return { mime: 'image/jpeg', ext: 'jpg' };
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    return { mime: 'image/png', ext: 'png' };
+  }
+  if (
+    buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buf.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return { mime: 'image/webp', ext: 'webp' };
+  }
+  const gif = buf.subarray(0, 6).toString('ascii');
+  if (gif === 'GIF87a' || gif === 'GIF89a') return { mime: 'image/gif', ext: 'gif' };
+  return null;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isBlockedError(error?: string) {
+  const e = (error || '').toLowerCase();
+  return (
+    e.includes('blocked') ||
+    e.includes('deactivated') ||
+    e.includes('chat not found') ||
+    e.includes('user is deactivated') ||
+    e.includes('forbidden')
+  );
+}
 
 @Injectable()
 export class AdminService {
@@ -14,6 +51,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly oracle: OracleService,
+    private readonly tg: TelegramNotifyService,
   ) {}
 
   async dashboard() {
@@ -1103,6 +1141,145 @@ export class AdminService {
       ),
       rateLimitMax: Number(process.env.RATE_LIMIT_MAX || 120),
       sessionAuthEnabled: true,
+    };
+  }
+
+  async broadcastAudience() {
+    const recipients = await this.prisma.db.user.count({
+      where: { status: 'ACTIVE' },
+    });
+    return {
+      recipients,
+      botConfigured: this.tg.tokenConfigured(),
+    };
+  }
+
+  async broadcast(
+    admin: User,
+    data: {
+      message?: string;
+      photoBase64?: string;
+      photoFilename?: string;
+      test?: boolean;
+    },
+  ) {
+    if (!this.tg.tokenConfigured()) {
+      throw new BadRequestException('Бот не настроен: нет TELEGRAM_BOT_TOKEN');
+    }
+
+    const message = (data.message || '').trim();
+    const photoRaw = (data.photoBase64 || '').replace(/\s/g, '');
+    if (!message && !photoRaw) {
+      throw new BadRequestException('Введите текст или прикрепите фото');
+    }
+    if (message.length > TEXT_MAX) {
+      throw new BadRequestException(`Текст длиннее ${TEXT_MAX} символов`);
+    }
+
+    let photoBuffer: Buffer | undefined;
+    let photoMime: string | undefined;
+    let photoFilename = data.photoFilename?.trim() || 'photo.jpg';
+    if (photoRaw) {
+      let decoded: Buffer;
+      try {
+        decoded = Buffer.from(photoRaw, 'base64');
+      } catch {
+        throw new BadRequestException('Не удалось прочитать фото');
+      }
+      if (!decoded.length || decoded.length > PHOTO_MAX_BYTES) {
+        throw new BadRequestException('Фото должно быть до 5 МБ');
+      }
+      const kind = sniffImage(decoded);
+      if (!kind) {
+        throw new BadRequestException('Нужен JPEG, PNG, WEBP или GIF');
+      }
+      photoBuffer = decoded;
+      photoMime = kind.mime;
+      if (!/\.(jpe?g|png|webp|gif)$/i.test(photoFilename)) {
+        photoFilename = `photo.${kind.ext}`;
+      }
+    }
+
+    const caption = photoBuffer
+      ? message.slice(0, CAPTION_MAX) || undefined
+      : undefined;
+    const textOnly = photoBuffer ? undefined : message;
+
+    let recipients: Array<{ telegramId: bigint }>;
+    if (data.test) {
+      recipients = [{ telegramId: admin.telegramId }];
+    } else {
+      recipients = await this.prisma.db.user.findMany({
+        where: { status: 'ACTIVE' },
+        select: { telegramId: true },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    if (!recipients.length) {
+      throw new BadRequestException('Нет получателей');
+    }
+
+    let sent = 0;
+    let blocked = 0;
+    let failed = 0;
+    let fileId: string | undefined;
+
+    for (const user of recipients) {
+      let result = photoBuffer
+        ? await this.tg.sendBroadcastPhoto(
+            user.telegramId,
+            fileId
+              ? { fileId }
+              : {
+                  buffer: photoBuffer,
+                  filename: photoFilename,
+                  mime: photoMime,
+                },
+            caption,
+          )
+        : await this.tg.sendBroadcastText(user.telegramId, textOnly || '');
+
+      if (result.retryAfter) {
+        await sleep((result.retryAfter + 0.4) * 1000);
+        result = photoBuffer
+          ? await this.tg.sendBroadcastPhoto(
+              user.telegramId,
+              fileId ? { fileId } : { buffer: photoBuffer, filename: photoFilename, mime: photoMime },
+              caption,
+            )
+          : await this.tg.sendBroadcastText(user.telegramId, textOnly || '');
+      }
+
+      if (result.ok) {
+        sent += 1;
+        if (result.fileId) fileId = result.fileId;
+      } else if (isBlockedError(result.error)) {
+        blocked += 1;
+      } else {
+        failed += 1;
+      }
+
+      await sleep(40);
+    }
+
+    await this.log(admin.id, 'BROADCAST', 'telegram', 'all', null, {
+      test: Boolean(data.test),
+      hasPhoto: Boolean(photoBuffer),
+      messageChars: message.length,
+      recipients: recipients.length,
+      sent,
+      blocked,
+      failed,
+    });
+
+    return {
+      recipients: recipients.length,
+      sent,
+      blocked,
+      failed,
+      test: Boolean(data.test),
+      hasPhoto: Boolean(photoBuffer),
     };
   }
 

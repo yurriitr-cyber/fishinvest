@@ -480,6 +480,33 @@ textarea:focus {
   letter-spacing: 0.01em;
 }
 
+.file-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.file-row input[type='file'] {
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.photo-preview-wrap {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.photo-preview {
+  width: 148px;
+  height: 148px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--edge);
+  background: rgba(2, 14, 24, 0.55);
+}
+
 .muted {
   color: var(--text-muted);
 }
