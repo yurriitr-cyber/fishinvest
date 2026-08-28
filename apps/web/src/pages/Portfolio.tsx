@@ -274,11 +274,9 @@ export function PortfolioPage({
                   type="button"
                   onClick={() => onSelectFish(p.fishId)}
                 >
-                  <img
-                    className="glyph"
-                    src={fishImage(p.symbol, p.imageUrl)}
-                    alt=""
-                  />
+                  <span className="glyph">
+                    <img src={fishImage(p.symbol, p.imageUrl)} alt="" />
+                  </span>
                   <div className="row-main">
                     <div className="name">
                       {fishName(p.symbol, p.name)}

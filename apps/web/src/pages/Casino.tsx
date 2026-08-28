@@ -526,11 +526,12 @@ export function Casino({
             className={`row loot-history ${rarityClass(o.rarity)}`}
             style={{ cursor: 'default' }}
           >
-            <img
-              className="glyph"
-              src={fishImage(o.symbol, o.imageUrl)}
-              alt=""
-            />
+            <span className="glyph">
+              <img
+                src={fishImage(o.symbol, o.imageUrl)}
+                alt=""
+              />
+            </span>
             <div className="row-main">
               <div className="name">{caseFishName(o.symbol, o.name)}</div>
               <div className="meta">

@@ -103,11 +103,9 @@ export function Market({
               type="button"
               onClick={() => onSelectFish(f.id)}
             >
-              <img
-                className="glyph"
-                src={fishImage(f.symbol, f.imageUrl)}
-                alt=""
-              />
+              <span className="glyph">
+                <img src={fishImage(f.symbol, f.imageUrl)} alt="" />
+              </span>
               <div className="row-main">
                 <div className="name">{fishName(f.symbol, f.name)}</div>
                 <div className="meta">
