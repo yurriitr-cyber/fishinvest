@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 
-const BANNER_VER = '20260828b';
+const BANNER_VER = '20260828c';
 
 const BANNERS = [
-  `/banners/banner-1.jpg?v=${BANNER_VER}`,
   `/banners/banner-2.jpg?v=${BANNER_VER}`,
   `/banners/banner-3.jpg?v=${BANNER_VER}`,
   `/banners/banner-4.jpg?v=${BANNER_VER}`,
