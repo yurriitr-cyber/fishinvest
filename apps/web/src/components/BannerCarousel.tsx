@@ -25,13 +25,14 @@ export function BannerCarousel() {
   }, [paused]);
 
   return (
-    <div
-      className="banner-carousel"
-      onPointerEnter={() => setPaused(true)}
-      onPointerLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
-      onBlur={() => setPaused(false)}
-    >
+    <div className="banner-wrap">
+      <div
+        className="banner-carousel"
+        onPointerEnter={() => setPaused(true)}
+        onPointerLeave={() => setPaused(false)}
+        onFocus={() => setPaused(true)}
+        onBlur={() => setPaused(false)}
+      >
       <div
         className="banner-track"
         style={{ transform: `translateX(-${index * 100}%)` }}
@@ -58,6 +59,7 @@ export function BannerCarousel() {
             onClick={() => setIndex(i)}
           />
         ))}
+      </div>
       </div>
     </div>
   );
