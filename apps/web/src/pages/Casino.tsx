@@ -378,31 +378,6 @@ export function Casino({
         })}
       </div>
 
-      <div className="promo-bar">
-        <input
-          value={promoCode}
-          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-          placeholder="Промокод"
-          aria-label="Промокод"
-          autoCapitalize="characters"
-          autoCorrect="off"
-          spellCheck={false}
-          enterKeyHint="done"
-          disabled={promoBusy || busy}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void applyPromo();
-          }}
-        />
-        <button
-          className="promo-apply"
-          type="button"
-          disabled={promoBusy || busy || !promoCode.trim()}
-          onClick={() => void applyPromo()}
-        >
-          {promoBusy ? '…' : 'Применить'}
-        </button>
-      </div>
-
       {selected && (
         <div className="trade-panel case-panel">
           <div className="case-head">
@@ -569,6 +544,31 @@ export function Casino({
           )}
         </div>
       )}
+
+      <div className="promo-bar">
+        <input
+          value={promoCode}
+          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+          placeholder="Промокод"
+          aria-label="Промокод"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="done"
+          disabled={promoBusy || busy}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void applyPromo();
+          }}
+        />
+        <button
+          className="promo-apply"
+          type="button"
+          disabled={promoBusy || busy || !promoCode.trim()}
+          onClick={() => void applyPromo()}
+        >
+          {promoBusy ? '…' : 'Применить'}
+        </button>
+      </div>
 
       <div className="section-title">Недавние открытия</div>
       {history.length === 0 && (
