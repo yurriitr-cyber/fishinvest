@@ -170,6 +170,7 @@ button {
   margin: 0 auto;
   min-height: 100dvh;
   padding-bottom: calc(var(--nav-h) + var(--safe-b) + 18px);
+  touch-action: pan-y;
 }
 
 .screen {
@@ -1329,6 +1330,7 @@ button {
    Bottom nav — floating glass dock
    —————————————————————————————— */
 .nav {
+  touch-action: manipulation;
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
@@ -1580,6 +1582,7 @@ button {
   position: relative;
   z-index: 2;
   isolation: isolate;
+  touch-action: pan-x;
 }
 
 .case-rail::-webkit-scrollbar {
@@ -1882,6 +1885,7 @@ button {
 
 .reel-viewport {
   overflow: hidden;
+  touch-action: pan-x;
   padding: 14px 0;
   mask-image: linear-gradient(
     90deg,

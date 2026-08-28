@@ -75,6 +75,8 @@ const ITEMS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
   },
 ];
 
+export const TABS: Tab[] = ITEMS.map((item) => item.id);
+
 export function BottomNav({
   tab,
   onChange,

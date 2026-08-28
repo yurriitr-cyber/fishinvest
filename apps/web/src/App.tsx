@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, type Me } from './lib/api';
 import { translateError } from './lib/labels';
+import { useTabSwipe } from './lib/useTabSwipe';
 import { BottomNav, type Tab } from './components/BottomNav';
 import { Welcome } from './pages/Welcome';
 import { Market } from './pages/Market';
@@ -18,6 +19,19 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+
+  const goTab = useCallback((next: Tab) => {
+    setSelectedFishId(null);
+    setTab(next);
+  }, []);
+
+  useTabSwipe(
+    !showWelcome && !loading && !!me && !error,
+    tab,
+    goTab,
+    shellRef,
+  );
 
   async function refreshMe() {
     const data = await api.me();
@@ -165,16 +179,10 @@ export default function App() {
         <span className="ocean-floor" />
         <span className="ocean-grain" />
       </div>
-      <div className="app-shell">
+      <div className="app-shell" ref={shellRef}>
         {body}
         {!showWelcome && !loading && me && !error && (
-          <BottomNav
-            tab={tab}
-            onChange={(next) => {
-              setSelectedFishId(null);
-              setTab(next);
-            }}
-          />
+          <BottomNav tab={tab} onChange={goTab} />
         )}
         {toast && <div className="toast">{toast}</div>}
       </div>
