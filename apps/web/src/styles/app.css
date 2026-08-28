@@ -766,7 +766,6 @@ button {
   height: 100%;
   object-fit: cover;
   display: block;
-  transform: scale(1.55);
 }
 
 .fish-lore {
@@ -1692,7 +1691,6 @@ button {
   height: 100%;
   object-fit: cover;
   object-position: center;
-  transform: scale(1.12);
   user-select: none;
   -webkit-user-drag: none;
 }
@@ -1936,7 +1934,6 @@ button {
   height: 100%;
   object-fit: cover;
   display: block;
-  transform: scale(1.55);
 }
 
 .media-slot.cell {
@@ -2100,7 +2097,6 @@ button {
   height: 100%;
   object-fit: cover;
   display: block;
-  transform: scale(1.55);
 }
 
 .media-slot.win {
@@ -2258,7 +2254,6 @@ button {
   height: 100%;
   object-fit: cover;
   display: block;
-  transform: scale(1.55);
 }
 
 .loot-row .name {
