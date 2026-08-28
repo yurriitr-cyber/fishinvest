@@ -353,7 +353,7 @@ button {
   isolation: isolate;
   overflow: hidden;
   border-radius: var(--radius);
-  aspect-ratio: 21 / 9;
+  aspect-ratio: 16 / 9;
   border: 1px solid var(--edge);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
