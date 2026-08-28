@@ -222,7 +222,7 @@ export function Trade({
         <>
           <div className="topbar">
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <span className="glyph" style={{ width: 80, height: 80, borderRadius: 18 }}>
+              <span className="glyph">
                 <img src={fishImage(fish.symbol, fish.imageUrl)} alt="" />
               </span>
               <div>

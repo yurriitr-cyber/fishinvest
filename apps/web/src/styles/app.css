@@ -314,10 +314,10 @@ button {
 
 .media-slot.thumb {
   flex-shrink: 0;
-  width: 72px;
-  height: 72px;
+  width: 96px;
+  height: 96px;
   aspect-ratio: 1;
-  border-radius: 16px;
+  border-radius: 14px;
   font-size: 0.72rem;
   letter-spacing: 0.02em;
   color: var(--accent-2);
@@ -719,9 +719,9 @@ button {
 .row {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 13px;
+  gap: 10px;
   align-items: center;
-  padding: 13px 14px;
+  padding: 3px 12px 3px 3px;
   text-align: left;
   width: 100%;
   border-radius: var(--radius);
@@ -742,9 +742,9 @@ button {
 
 .glyph {
   flex-shrink: 0;
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -793,6 +793,8 @@ button {
 }
 
 .glyph.rank {
+  width: 52px;
+  height: 52px;
   color: var(--text);
   font-size: 1.05rem;
   font-variant-numeric: tabular-nums;
@@ -2227,9 +2229,9 @@ button {
 .loot-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 3px 12px 3px 3px;
   border-radius: var(--radius-sm);
   border: 1px solid color-mix(in srgb, var(--rare-1) 24%, transparent);
   background:
@@ -2243,10 +2245,10 @@ button {
 
 .loot-art {
   flex-shrink: 0;
-  width: 72px;
-  height: 72px;
+  width: 96px;
+  height: 96px;
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: 14px;
 }
 
 .loot-art img {
@@ -2282,8 +2284,8 @@ button {
 }
 
 .row.loot-history .glyph {
-  width: 72px;
-  height: 72px;
+  width: 96px;
+  height: 96px;
 }
 
 .row.loot-history .name {
