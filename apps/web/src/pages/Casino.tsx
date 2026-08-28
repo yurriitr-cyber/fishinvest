@@ -24,7 +24,7 @@ import {
 import { hapticImpact, hapticNotify } from '../lib/telegram';
 
 const CASE_ART: Record<string, string> = {
-  DAILY: '/cases/DAILY.jpg?v=1',
+  DAILY: '/cases/DAILY.jpg?v=2',
   TIDE: '/cases/TIDE.jpg',
   REEF: '/cases/REEF.jpg',
   ABYSS: '/cases/ABYSS.jpg',
