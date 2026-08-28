@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, type Me } from './lib/api';
 import { translateError } from './lib/labels';
-import { useTabSwipe } from './lib/useTabSwipe';
+import { useTabPager } from './lib/useTabPager';
 import { BottomNav, type Tab } from './components/BottomNav';
 import { Welcome } from './pages/Welcome';
 import { Market } from './pages/Market';
@@ -19,19 +19,28 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const shellRef = useRef<HTMLDivElement>(null);
+  const [navTab, setNavTab] = useState<Tab>('market');
+  const pagerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLSpanElement>(null);
 
   const goTab = useCallback((next: Tab) => {
     setSelectedFishId(null);
     setTab(next);
+    setNavTab(next);
   }, []);
 
-  useTabSwipe(
-    !showWelcome && !loading && !!me && !error,
+  const showPager = !showWelcome && !loading && !!me && !error;
+
+  useTabPager({
+    enabled: showPager && !selectedFishId,
     tab,
-    goTab,
-    shellRef,
-  );
+    onChange: goTab,
+    onHint: setNavTab,
+    viewportRef: pagerRef,
+    trackRef,
+    thumbRef,
+  });
 
   async function refreshMe() {
     const data = await api.me();
@@ -78,7 +87,7 @@ export default function App() {
     notify('Сделка исполнена');
   }
 
-  let body: ReactNode;
+  let body: ReactNode = null;
 
   if (loading) {
     body = (
@@ -121,54 +130,6 @@ export default function App() {
         notify={notify}
       />
     );
-  } else {
-    switch (tab) {
-      case 'market':
-        body = (
-          <Market
-            me={me}
-            onSelectFish={(id) => setSelectedFishId(id)}
-          />
-        );
-        break;
-      case 'portfolio':
-        body = (
-          <PortfolioPage
-            me={me}
-            onSelectFish={setSelectedFishId}
-            onSold={async () => {
-              await refreshMe();
-            }}
-            notify={notify}
-          />
-        );
-        break;
-      case 'deposit':
-        body = (
-          <Deposit
-            me={me}
-            onCredited={async () => {
-              await refreshMe();
-              notify('Депозит подтверждён. Кредиты зачислены.');
-            }}
-          />
-        );
-        break;
-      case 'casino':
-        body = (
-          <Casino
-            me={me}
-            onOpened={async () => {
-              await refreshMe();
-            }}
-            notify={notify}
-          />
-        );
-        break;
-      case 'invite':
-        body = <Referrals me={me} notify={notify} />;
-        break;
-    }
   }
 
   return (
@@ -179,10 +140,57 @@ export default function App() {
         <span className="ocean-floor" />
         <span className="ocean-grain" />
       </div>
-      <div className="app-shell" ref={shellRef}>
+      <div className="app-shell">
         {body}
-        {!showWelcome && !loading && me && !error && (
-          <BottomNav tab={tab} onChange={goTab} />
+        {showPager && me && (
+          <div
+            className="pager"
+            ref={pagerRef}
+            hidden={!!selectedFishId}
+          >
+            <div className="pager-track" ref={trackRef}>
+              <div className="pager-page">
+                <Market
+                  me={me}
+                  onSelectFish={(id) => setSelectedFishId(id)}
+                />
+              </div>
+              <div className="pager-page">
+                <PortfolioPage
+                  me={me}
+                  onSelectFish={setSelectedFishId}
+                  onSold={async () => {
+                    await refreshMe();
+                  }}
+                  notify={notify}
+                />
+              </div>
+              <div className="pager-page">
+                <Deposit
+                  me={me}
+                  onCredited={async () => {
+                    await refreshMe();
+                    notify('Депозит подтверждён. Кредиты зачислены.');
+                  }}
+                />
+              </div>
+              <div className="pager-page">
+                <Casino
+                  me={me}
+                  onOpened={async () => {
+                    await refreshMe();
+                  }}
+                  notify={notify}
+                />
+              </div>
+              <div className="pager-page">
+                <Referrals me={me} notify={notify} />
+              </div>
+            </div>
+          </div>
+        )}
+        {showPager && (
+          <BottomNav tab={navTab} onChange={goTab} thumbRef={thumbRef} />
         )}
         {toast && <div className="toast">{toast}</div>}
       </div>
