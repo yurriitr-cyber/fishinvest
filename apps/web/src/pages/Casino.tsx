@@ -43,7 +43,7 @@ function caseFishName(symbol: string, fallback?: string | null) {
 }
 
 /** Reel geometry — cell + gap must match CSS. */
-const CELL = 88;
+const CELL = 112;
 const GAP = 10;
 const STRIDE = CELL + GAP;
 const REEL_LEN = 60;
