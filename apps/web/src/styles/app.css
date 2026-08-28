@@ -160,11 +160,6 @@ button {
   }
 }
 
-html.is-paging .ocean-rays,
-html.is-paging .ocean-caustics {
-  animation-play-state: paused;
-}
-
 /* ——————————————————————————————
    Shell
    —————————————————————————————— */
@@ -173,54 +168,8 @@ html.is-paging .ocean-caustics {
   z-index: 1;
   max-width: 480px;
   margin: 0 auto;
-  height: 100dvh;
-  overflow: hidden;
-  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 12px);
-  touch-action: pan-y;
-}
-
-.app-shell > .screen,
-.app-shell > .hero,
-.app-shell > .state-box {
-  height: 100%;
-  overflow-y: auto;
-}
-
-.pager {
-  height: 100%;
-  overflow: hidden;
-  touch-action: pan-y;
-}
-
-.pager-track {
-  display: flex;
-  height: 100%;
-}
-
-.pager-page {
-  flex: 0 0 100%;
-  width: 100%;
-  height: 100%;
-  overflow-x: clip;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  contain: layout style paint;
-  content-visibility: auto;
-  contain-intrinsic-size: 100% 100%;
-  pointer-events: none;
-}
-
-.pager-page.is-active {
-  pointer-events: auto;
-}
-
-.pager-page.is-near {
-  content-visibility: visible;
-}
-
-.pager-page .screen {
-  animation: none;
+  min-height: 100dvh;
+  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 18px);
 }
 
 .screen {
@@ -1380,7 +1329,6 @@ html.is-paging .ocean-caustics {
    Bottom nav — floating glass dock
    —————————————————————————————— */
 .nav {
-  touch-action: none;
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
@@ -1388,7 +1336,9 @@ html.is-paging .ocean-caustics {
   width: min(452px, calc(100% - 24px));
   height: var(--nav-h);
   padding: 7px 8px;
-  display: block;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
   border-radius: 999px;
   background:
     linear-gradient(158deg, var(--glass-3) 0%, transparent 45%),
@@ -1403,29 +1353,6 @@ html.is-paging .ocean-caustics {
   z-index: 20;
 }
 
-.nav-items {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 2px;
-  height: 100%;
-  position: relative;
-  z-index: 1;
-}
-
-.nav-thumb {
-  position: absolute;
-  z-index: 0;
-  top: 7px;
-  bottom: 7px;
-  left: 8px;
-  width: calc((100% - 24px) / 5);
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 6px 20px -8px rgba(70, 214, 230, 0.8);
-  pointer-events: none;
-  will-change: transform;
-}
-
 .nav button {
   display: flex;
   flex-direction: column;
@@ -1437,11 +1364,13 @@ html.is-paging .ocean-caustics {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-dim);
-  transition: color 180ms ease;
+  transition: color 200ms ease, background 240ms ease;
 }
 
 .nav button.active {
   color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 6px 20px -8px rgba(70, 214, 230, 0.8);
 }
 
 .nav .ico {
@@ -1956,8 +1885,8 @@ html.is-paging .ocean-caustics {
 .reel-viewport {
   position: relative;
   z-index: 0;
+  isolation: isolate;
   overflow: hidden;
-  touch-action: pan-x;
   padding: 14px 0;
   mask-image: linear-gradient(
     90deg,
@@ -1982,26 +1911,6 @@ html.is-paging .ocean-caustics {
   will-change: transform;
   transition-property: transform;
   transition-timing-function: cubic-bezier(0.08, 0.82, 0.1, 1);
-}
-
-/* Smear while fast, sharpen as it settles. */
-.reel-track.sliding {
-  animation: reel-smear 4600ms cubic-bezier(0.08, 0.82, 0.1, 1) forwards;
-}
-
-@keyframes reel-smear {
-  0% {
-    filter: blur(3px);
-  }
-  40% {
-    filter: blur(2px);
-  }
-  80% {
-    filter: blur(0.6px);
-  }
-  100% {
-    filter: blur(0);
-  }
 }
 
 /* Landing flash across the whole reel. */
@@ -2062,19 +1971,32 @@ html.is-paging .ocean-caustics {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 0 26px -4px var(--rare-2);
-  animation: cell-hit 560ms cubic-bezier(0.2, 1.4, 0.3, 1) forwards;
 }
 
-@keyframes cell-hit {
-  0% {
-    transform: scale(1);
-  }
-  35% {
-    transform: scale(1.12);
-  }
-  100% {
-    transform: scale(1.05);
-  }
+.reel-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  transform: translateZ(1px);
+}
+
+.reel-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--accent) 18%,
+    var(--accent-2) 50%,
+    var(--accent) 82%,
+    transparent
+  );
+  box-shadow: 0 0 16px 2px rgba(70, 214, 230, 0.55);
 }
 
 .reel-cell-art {
@@ -2123,27 +2045,6 @@ html.is-paging .ocean-caustics {
   font-size: 0.64rem;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
-}
-
-/* Centre needle the winning cell stops under. */
-.reel-marker {
-  position: absolute;
-  z-index: 8;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 2px;
-  transform: translateX(-1px);
-  background: linear-gradient(
-    180deg,
-    transparent,
-    var(--accent) 18%,
-    var(--accent-2) 50%,
-    var(--accent) 82%,
-    transparent
-  );
-  box-shadow: 0 0 16px 2px rgba(70, 214, 230, 0.55);
-  pointer-events: none;
 }
 
 .reel-marker::before,

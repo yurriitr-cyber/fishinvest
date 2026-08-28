@@ -1,4 +1,4 @@
-import { type ReactNode, type Ref } from 'react';
+import type { ReactNode } from 'react';
 
 export type Tab = 'market' | 'portfolio' | 'deposit' | 'casino' | 'invite';
 
@@ -75,33 +75,26 @@ const ITEMS: Array<{ id: Tab; label: string; icon: ReactNode }> = [
   },
 ];
 
-export const TABS: Tab[] = ITEMS.map((item) => item.id);
-
 export function BottomNav({
   tab,
   onChange,
-  thumbRef,
 }: {
   tab: Tab;
   onChange: (tab: Tab) => void;
-  thumbRef: Ref<HTMLSpanElement>;
 }) {
   return (
     <nav className="nav">
-      <span className="nav-thumb" ref={thumbRef} aria-hidden />
-      <div className="nav-items">
-        {ITEMS.map((item) => (
-          <button
-            key={item.id}
-            className={tab === item.id ? 'active' : undefined}
-            onClick={() => onChange(item.id)}
-            type="button"
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
+      {ITEMS.map((item) => (
+        <button
+          key={item.id}
+          className={tab === item.id ? 'active' : undefined}
+          onClick={() => onChange(item.id)}
+          type="button"
+        >
+          {item.icon}
+          <span>{item.label}</span>
+        </button>
+      ))}
     </nav>
   );
 }

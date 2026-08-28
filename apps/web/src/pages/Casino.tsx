@@ -443,7 +443,9 @@ export function Casino({
                 </div>
               )}
             </div>
-            <span className="reel-marker" aria-hidden />
+            <div className="reel-hud" aria-hidden>
+              <span className="reel-marker" />
+            </div>
           </div>
 
           {reveal && (
