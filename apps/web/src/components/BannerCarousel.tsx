@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 
-const BANNER_VER = '20260828c';
+const BANNER_VER = '20260828d';
 
 const BANNERS = [
+  `/banners/banner-1.jpg?v=${BANNER_VER}`,
   `/banners/banner-2.jpg?v=${BANNER_VER}`,
   `/banners/banner-3.jpg?v=${BANNER_VER}`,
   `/banners/banner-4.jpg?v=${BANNER_VER}`,
   `/banners/banner-5.jpg?v=${BANNER_VER}`,
-  `/banners/banner-6.jpg?v=${BANNER_VER}`,
 ] as const;
 
 const ROTATE_MS = 4500;
