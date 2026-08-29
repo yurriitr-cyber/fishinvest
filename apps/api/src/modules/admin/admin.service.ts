@@ -595,6 +595,101 @@ export class AdminService {
     };
   }
 
+  private async userActivity(userId: string) {
+    const now = Date.now();
+    const since30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const cuts = {
+      h1: now - 60 * 60 * 1000,
+      h24: now - 24 * 60 * 60 * 1000,
+      d7: now - 7 * 24 * 60 * 60 * 1000,
+      d30: since30.getTime(),
+    };
+    const countIn = (rows: { createdAt: Date }[], from: number) =>
+      rows.filter((row) => row.createdAt.getTime() >= from).length;
+
+    const [
+      trades,
+      cases,
+      deposits,
+      ledgers,
+      lastTrade,
+      lastCase,
+      lastDeposit,
+      lastLedger,
+    ] = await Promise.all([
+      this.prisma.db.trade.findMany({
+        where: { userId, createdAt: { gte: since30 } },
+        select: { createdAt: true },
+      }),
+      this.prisma.db.caseOpening.findMany({
+        where: { userId, createdAt: { gte: since30 } },
+        select: { createdAt: true },
+      }),
+      this.prisma.db.deposit.findMany({
+        where: { userId, status: 'CONFIRMED', createdAt: { gte: since30 } },
+        select: { createdAt: true },
+      }),
+      this.prisma.db.gameBalanceLedger.findMany({
+        where: { userId, createdAt: { gte: since30 } },
+        select: { createdAt: true },
+      }),
+      this.prisma.db.trade.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+      this.prisma.db.caseOpening.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+      this.prisma.db.deposit.findFirst({
+        where: { userId, status: 'CONFIRMED' },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+      this.prisma.db.gameBalanceLedger.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+    ]);
+
+    const windowOf = (from: number) => ({
+      trades: countIn(trades, from),
+      cases: countIn(cases, from),
+      deposits: countIn(deposits, from),
+      ledger: countIn(ledgers, from),
+    });
+
+    const dayKeys = new Set<string>();
+    for (const row of [...trades, ...cases, ...deposits]) {
+      dayKeys.add(row.createdAt.toISOString().slice(0, 10));
+    }
+
+    const lastActionMs = Math.max(
+      lastTrade?.createdAt.getTime() ?? 0,
+      lastCase?.createdAt.getTime() ?? 0,
+      lastDeposit?.createdAt.getTime() ?? 0,
+      lastLedger?.createdAt.getTime() ?? 0,
+    );
+
+    return {
+      windows: {
+        h1: windowOf(cuts.h1),
+        h24: windowOf(cuts.h24),
+        d7: windowOf(cuts.d7),
+        d30: windowOf(cuts.d30),
+      },
+      lastTradeAt: lastTrade?.createdAt.toISOString() ?? null,
+      lastCaseAt: lastCase?.createdAt.toISOString() ?? null,
+      lastDepositAt: lastDeposit?.createdAt.toISOString() ?? null,
+      lastLedgerAt: lastLedger?.createdAt.toISOString() ?? null,
+      lastActionAt: lastActionMs ? new Date(lastActionMs).toISOString() : null,
+      activeDays30: dayKeys.size,
+    };
+  }
+
   async getUser(id: string) {
     const user = await this.prisma.db.user.findUnique({
       where: { id },
@@ -631,7 +726,6 @@ export class AdminService {
     });
     if (!user) throw new NotFoundException('User not found');
 
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const [
       depositSum,
       openingsAgg,
@@ -639,8 +733,7 @@ export class AdminService {
       buyAgg,
       sellAgg,
       referralCount,
-      openings24h,
-      trades24h,
+      activity,
     ] = await Promise.all([
       this.prisma.db.deposit.aggregate({
         where: { userId: id, status: 'CONFIRMED' },
@@ -663,12 +756,7 @@ export class AdminService {
         _count: true,
       }),
       this.prisma.db.referral.count({ where: { referrerId: id } }),
-      this.prisma.db.caseOpening.count({
-        where: { userId: id, createdAt: { gte: since24h } },
-      }),
-      this.prisma.db.trade.count({
-        where: { userId: id, createdAt: { gte: since24h } },
-      }),
+      this.userActivity(id),
     ]);
 
     let portfolioValue = new Prisma.Decimal(0);
@@ -703,8 +791,11 @@ export class AdminService {
     return {
       ...this.serializeUserSummary(user),
       lastName: user.lastName,
+      languageCode: user.languageCode,
       createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
       lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
+      referredAt: user.referredAt?.toISOString() ?? null,
       referralCode: user.referralCode,
       referredBy: user.referredBy
         ? {
@@ -732,12 +823,19 @@ export class AdminService {
         buyCount: buyAgg._count,
         sellCount: sellAgg._count,
         caseOpenings: openingsCount,
-        caseOpenings24h: openings24h,
+        caseOpenings24h: activity.windows.h24.cases,
         caseSpent: caseSpent.toFixed(4),
         caseWonValue: caseWon.toFixed(4),
         casePnl: caseWon.sub(caseSpent).toFixed(4),
         referralsCount: referralCount,
-        trades24h,
+        trades24h: activity.windows.h24.trades,
+        lastTradeAt: activity.lastTradeAt,
+        lastCaseAt: activity.lastCaseAt,
+        lastDepositAt: activity.lastDepositAt,
+        lastLedgerAt: activity.lastLedgerAt,
+        lastActionAt: activity.lastActionAt,
+        activeDays30: activity.activeDays30,
+        windows: activity.windows,
       },
       portfolioPositions,
       deposits: user.deposits.map((d) => ({

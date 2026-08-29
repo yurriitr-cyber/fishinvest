@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   adminApi,
   clearAdminSession,
@@ -77,6 +77,33 @@ function ago(iso?: string | null) {
   return `${days} дн. назад`;
 }
 
+const ONLINE_MS = 5 * 60_000;
+
+function presence(iso?: string | null) {
+  if (!iso) return { label: 'Никогда не заходил', tone: 'off' as const };
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms)) return { label: 'Неизвестно', tone: 'off' as const };
+  if (ms < ONLINE_MS) return { label: 'Онлайн', tone: 'on' as const };
+  if (ms < 86_400_000) return { label: `Был ${ago(iso)}`, tone: 'recent' as const };
+  return { label: `Офлайн · ${ago(iso)}`, tone: 'off' as const };
+}
+
+function tenure(iso?: string) {
+  if (!iso) return '—';
+  const days = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000),
+  );
+  if (days < 1) return 'сегодня';
+  if (days < 30) return `${days} дн.`;
+  return `${days} дн. · ${Math.floor(days / 30)} мес.`;
+}
+
+function eventWhen(iso?: string | null) {
+  if (!iso) return 'нет';
+  return `${ago(iso)} · ${when(iso)}`;
+}
+
 function copyText(value: string) {
   void navigator.clipboard?.writeText(value);
 }
@@ -109,6 +136,7 @@ export default function App() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersTotal, setUsersTotal] = useState(0);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
+  const userDetailRef = useRef<HTMLDivElement>(null);
   const [balanceInput, setBalanceInput] = useState('');
   const [balanceReason, setBalanceReason] = useState('пополнение админом');
   const [adjustDelta, setAdjustDelta] = useState('50');
@@ -216,6 +244,22 @@ export default function App() {
     setUsersTotal(res.total);
     return res;
   }
+
+  async function openUser(id: string) {
+    const detail = await adminApi.user(id);
+    setSelectedUser(detail);
+    setBalanceInput(String(Number(detail.gameBalance?.available ?? 0)));
+    setBalanceReason('пополнение админом');
+    setGiftFishId(fish[0]?.id ?? '');
+    setGiftQty('1');
+    setOkMsg(null);
+    setError(null);
+  }
+
+  useEffect(() => {
+    if (!selectedUser) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [selectedUser?.id]);
 
   useEffect(() => {
     if (getDevTelegramId() && getAdminSession()) boot();
@@ -788,6 +832,7 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              <div className="users-stack">
               <div className="panel">
                 <div className="panel-head">
                   <div>
@@ -832,7 +877,7 @@ export default function App() {
                     return true;
                   })
                   .map((u) => (
-                  <div key={u.id} className="row">
+                  <div key={u.id} className={`row${selectedUser?.id === u.id ? ' selected' : ''}`}>
                     <div>
                       {u.username || u.firstName || 'User'}{' '}
                       {u.status === 'BANNED' ? (
@@ -867,17 +912,12 @@ export default function App() {
                       <button
                         type="button"
                         className="btn btn-sm btn-primary"
-                        onClick={async () => {
-                          const detail = await adminApi.user(u.id);
-                          setSelectedUser(detail);
-                          setBalanceInput(
-                            String(Number(detail.gameBalance?.available ?? 0)),
+                        onClick={() => {
+                          void openUser(u.id).catch((err) =>
+                            setError(
+                              err instanceof Error ? err.message : 'Ошибка',
+                            ),
                           );
-                          setBalanceReason('пополнение админом');
-                          setGiftFishId(fish[0]?.id ?? '');
-                          setGiftQty('1');
-                          setOkMsg(null);
-                          setError(null);
                         }}
                       >
                         Открыть
@@ -913,7 +953,7 @@ export default function App() {
               </div>
 
               {selectedUser && (
-                <div className="panel">
+                <div className="panel user-detail" ref={userDetailRef}>
                   <div className="panel-head">
                     <div>
                       <h2>
@@ -921,21 +961,39 @@ export default function App() {
                         {selectedUser.lastName ? ` ${selectedUser.lastName}` : ''}
                       </h2>
                       <p className="muted">
+                        <span className="presence">
+                          <span
+                            className={`presence-dot ${presence(selectedUser.lastSeenAt).tone}`}
+                          />
+                          {presence(selectedUser.lastSeenAt).label}
+                        </span>
+                        {' · '}
                         tg {String(selectedUser.telegramId)} · {selectedUser.status}
-                        {selectedUser.isAdmin ? ' · admin' : ''} · был{' '}
-                        {ago(selectedUser.lastSeenAt)}
+                        {selectedUser.isAdmin ? ' · admin' : ''}
+                        {selectedUser.languageCode
+                          ? ` · ${selectedUser.languageCode}`
+                          : ''}
                         {selectedUser.referralCode
                           ? ` · реф. ${selectedUser.referralCode}`
                           : ''}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() => copyText(String(selectedUser.telegramId))}
-                    >
-                      Копировать Telegram ID
-                    </button>
+                    <div className="user-detail-actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => copyText(String(selectedUser.telegramId))}
+                      >
+                        Копировать Telegram ID
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => setSelectedUser(null)}
+                      >
+                        Закрыть
+                      </button>
+                    </div>
                   </div>
 
                   {selectedUser.referredBy ? (
@@ -944,8 +1002,121 @@ export default function App() {
                       {selectedUser.referredBy.username ||
                         selectedUser.referredBy.firstName ||
                         selectedUser.referredBy.telegramId}
+                      {selectedUser.referredAt
+                        ? ` · ${when(selectedUser.referredAt)}`
+                        : ''}
                     </p>
                   ) : null}
+
+                  <div className="grid-stats">
+                    <div className="stat">
+                      <div className="label">В приложении</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>
+                        {tenure(selectedUser.createdAt)}
+                        <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+                          с {selectedUser.createdAt ? when(selectedUser.createdAt) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Последний заход</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>
+                        {ago(selectedUser.lastSeenAt)}
+                        <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+                          {selectedUser.lastSeenAt
+                            ? when(selectedUser.lastSeenAt)
+                            : 'Mini App не открывал'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Последнее действие</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>
+                        {ago(selectedUser.stats?.lastActionAt)}
+                        <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+                          {selectedUser.stats?.lastActionAt
+                            ? when(selectedUser.stats.lastActionAt)
+                            : 'сделок, кейсов и депозитов нет'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Активных дней / 30д</div>
+                      <div className="value">
+                        {n(selectedUser.stats?.activeDays30 ?? 0, 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <table className="activity-table">
+                    <thead>
+                      <tr>
+                        <th>Активность</th>
+                        <th>1ч</th>
+                        <th>24ч</th>
+                        <th>7д</th>
+                        <th>30д</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(
+                        [
+                          ['Сделки', 'trades'],
+                          ['Кейсы', 'cases'],
+                          ['Депозиты', 'deposits'],
+                          ['Движения баланса', 'ledger'],
+                        ] as const
+                      ).map(([label, key]) => (
+                        <tr key={key}>
+                          <td>{label}</td>
+                          <td className="mono">
+                            {selectedUser.stats?.windows?.h1[key] ?? 0}
+                          </td>
+                          <td className="mono">
+                            {selectedUser.stats?.windows?.h24[key] ??
+                              (key === 'trades'
+                                ? selectedUser.stats?.trades24h ?? 0
+                                : key === 'cases'
+                                  ? selectedUser.stats?.caseOpenings24h ?? 0
+                                  : 0)}
+                          </td>
+                          <td className="mono">
+                            {selectedUser.stats?.windows?.d7[key] ?? 0}
+                          </td>
+                          <td className="mono">
+                            {selectedUser.stats?.windows?.d30[key] ?? 0}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="grid-stats">
+                    <div className="stat">
+                      <div className="label">Последняя сделка</div>
+                      <div className="value" style={{ fontSize: '0.95rem' }}>
+                        {eventWhen(selectedUser.stats?.lastTradeAt)}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Последний кейс</div>
+                      <div className="value" style={{ fontSize: '0.95rem' }}>
+                        {eventWhen(selectedUser.stats?.lastCaseAt)}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Последний депозит</div>
+                      <div className="value" style={{ fontSize: '0.95rem' }}>
+                        {eventWhen(selectedUser.stats?.lastDepositAt)}
+                      </div>
+                    </div>
+                    <div className="stat">
+                      <div className="label">Последнее движение</div>
+                      <div className="value" style={{ fontSize: '0.95rem' }}>
+                        {eventWhen(selectedUser.stats?.lastLedgerAt)}
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="grid-stats">
                     <div className="stat">
@@ -995,6 +1166,9 @@ export default function App() {
                       <div className="label">Покупки / продажи</div>
                       <div className="value" style={{ fontSize: '1rem' }}>
                         {n(selectedUser.stats?.buyVolume)} / {n(selectedUser.stats?.sellVolume)}
+                        <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+                          {n(selectedUser.stats?.buyCount, 0)} пок. / {n(selectedUser.stats?.sellCount, 0)} прод.
+                        </div>
                       </div>
                     </div>
                     <div className="stat">
@@ -1010,12 +1184,6 @@ export default function App() {
                       <div className="label">Рефералы</div>
                       <div className="value">
                         {n(selectedUser.stats?.referralsCount, 0)}
-                      </div>
-                    </div>
-                    <div className="stat">
-                      <div className="label">Активность 24ч</div>
-                      <div className="value" style={{ fontSize: '1rem' }}>
-                        {selectedUser.stats?.trades24h ?? 0} сд. / {selectedUser.stats?.caseOpenings24h ?? 0} кейс.
                       </div>
                     </div>
                   </div>
@@ -1302,6 +1470,7 @@ export default function App() {
                   </div>
                 </div>
               )}
+              </div>
             </>
           )}
 

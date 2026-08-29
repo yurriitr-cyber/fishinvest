@@ -273,8 +273,18 @@ export type AdminUser = {
   gameBalance?: { available: string | number } | null;
 };
 
+export type ActivityWindow = {
+  trades: number;
+  cases: number;
+  deposits: number;
+  ledger: number;
+};
+
 export type AdminUserDetail = AdminUser & {
   lastName?: string | null;
+  languageCode?: string | null;
+  updatedAt?: string;
+  referredAt?: string | null;
   referralCode?: string;
   referredBy?: {
     id: string;
@@ -302,6 +312,18 @@ export type AdminUserDetail = AdminUser & {
     casePnl: string;
     referralsCount: number;
     trades24h: number;
+    lastTradeAt?: string | null;
+    lastCaseAt?: string | null;
+    lastDepositAt?: string | null;
+    lastLedgerAt?: string | null;
+    lastActionAt?: string | null;
+    activeDays30?: number;
+    windows?: {
+      h1: ActivityWindow;
+      h24: ActivityWindow;
+      d7: ActivityWindow;
+      d30: ActivityWindow;
+    };
   };
   ledgerEntries: Array<{
     type: string;

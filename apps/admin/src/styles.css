@@ -308,6 +308,83 @@ button {
   margin-bottom: 18px;
 }
 
+.users-stack {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.user-detail .panel-head .muted {
+  max-width: none;
+}
+
+.user-detail {
+  scroll-margin-top: 16px;
+}
+
+.user-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 650;
+}
+
+.presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.presence-dot.on {
+  background: var(--up);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--up) 70%, transparent);
+}
+
+.presence-dot.recent {
+  background: #f0c14a;
+}
+
+.activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 16px;
+  font-size: 0.86rem;
+}
+
+.activity-table th,
+.activity-table td {
+  padding: 8px 10px;
+  text-align: right;
+  border-bottom: 1px solid rgba(190, 232, 255, 0.1);
+}
+
+.activity-table th:first-child,
+.activity-table td:first-child {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 560;
+}
+
+.activity-table thead th {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 650;
+}
+
+.row.selected {
+  background: rgba(70, 214, 230, 0.08);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .stat {
   padding: 14px 16px;
 }
