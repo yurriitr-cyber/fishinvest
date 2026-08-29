@@ -18,7 +18,15 @@ import {
   type PromoCode,
   type SecurityOverview,
 } from './api';
-import { caseName, fishName, ledgerLabel, rarityLabel } from './labels';
+import {
+  caseName,
+  depositProviderLabel,
+  depositStatusLabel,
+  depositStatusTone,
+  fishName,
+  ledgerLabel,
+  rarityLabel,
+} from './labels';
 
 type Tab =
   | 'dashboard'
@@ -1681,18 +1689,49 @@ export default function App() {
           {tab === 'deposits' && (
             <div className="panel">
               <h2>Последние депозиты</h2>
-              {deposits.map((d) => (
-                <div key={d.id} className="row">
-                  <div>
-                    {d.provider} · {d.status}
+              <p className="muted" style={{ marginBottom: 14 }}>
+                Оплата прошла — деньги на балансе. Ждёт оплату — счёт открыт,
+                ещё не заплатили. Оплата не прошла — ошибка или отказ.
+              </p>
+              <div className="row header deposit-row">
+                <div>Игрок</div>
+                <div>Способ</div>
+                <div>Статус</div>
+                <div>Когда</div>
+              </div>
+              {deposits.map((d) => {
+                const tone = depositStatusTone(d.status);
+                const paid = d.status === 'CONFIRMED';
+                return (
+                  <div key={d.id} className="row deposit-row">
+                    <div>
+                      {d.user?.username || 'User'}
+                      <div className="dim" style={{ fontSize: 11 }}>
+                        tg {String(d.user?.telegramId ?? '—')}
+                      </div>
+                    </div>
+                    <div>
+                      {depositProviderLabel(d.provider)}
+                      <div className="mono dim" style={{ fontSize: 11 }}>
+                        {n(d.assetAmount)}
+                        {d.gameCreditAmount != null
+                          ? paid
+                            ? ` → +${n(d.gameCreditAmount)} CR`
+                            : ` · к зачислению ${n(d.gameCreditAmount)} CR`
+                          : ''}
+                      </div>
+                    </div>
+                    <div>
+                      <span
+                        className={`badge badge-status${tone ? ` badge-${tone}` : ''}`}
+                      >
+                        {depositStatusLabel(d.status)}
+                      </span>
+                    </div>
+                    <div className="muted">{when(d.createdAt)}</div>
                   </div>
-                  <div className="mono">{n(d.assetAmount)}</div>
-                  <div className="mono">{n(d.gameCreditAmount)}</div>
-                  <div className="muted">
-                    {d.user?.username || d.user?.telegramId} · {when(d.createdAt)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {!deposits.length && <p className="muted">Пока пусто</p>}
             </div>
           )}

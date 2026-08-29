@@ -70,3 +70,42 @@ export function rarityLabel(rarity?: string | null) {
   if (!rarity) return '';
   return RARITY[rarity.toUpperCase()] || rarity;
 }
+
+const DEPOSIT_STATUS: Record<string, string> = {
+  CONFIRMED: 'Оплата прошла',
+  FAILED: 'Оплата не прошла',
+  CANCELLED: 'Оплата отменена',
+  PENDING: 'Ждёт оплату',
+};
+
+const DEPOSIT_PROVIDER: Record<string, string> = {
+  TELEGRAM_STARS: 'Telegram Stars',
+  TON: 'TON',
+  TELEGRAM_GIFT: 'Подарок',
+  CRYPTO: 'Crypto',
+};
+
+export function depositStatusLabel(status?: string | null) {
+  if (!status) return '—';
+  return DEPOSIT_STATUS[status.toUpperCase()] || status;
+}
+
+export function depositStatusTone(status?: string | null) {
+  switch ((status || '').toUpperCase()) {
+    case 'CONFIRMED':
+      return 'ok';
+    case 'FAILED':
+      return 'danger';
+    case 'CANCELLED':
+      return 'muted';
+    case 'PENDING':
+      return 'warn';
+    default:
+      return '';
+  }
+}
+
+export function depositProviderLabel(provider?: string | null) {
+  if (!provider) return '—';
+  return DEPOSIT_PROVIDER[provider.toUpperCase()] || provider;
+}

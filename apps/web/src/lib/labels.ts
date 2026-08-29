@@ -47,11 +47,11 @@ const CASE_DESC: Record<string, string> = {
 };
 
 const DEPOSIT_STATUS: Record<string, string> = {
-  PENDING: 'Ожидание',
-  CONFIRMED: 'Зачислено',
-  CANCELLED: 'Отменено',
-  FAILED: 'Ошибка',
-  EXPIRED: 'Истекло',
+  PENDING: 'Ждёт оплату',
+  CONFIRMED: 'Оплата прошла',
+  CANCELLED: 'Оплата отменена',
+  FAILED: 'Оплата не прошла',
+  EXPIRED: 'Счёт истёк',
 };
 
 const ERROR_MAP: Array<[RegExp | string, string]> = [
