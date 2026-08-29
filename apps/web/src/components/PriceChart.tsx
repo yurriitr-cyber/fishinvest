@@ -20,10 +20,7 @@ export function PriceChart({
 
     async function pull() {
       try {
-        const [hist, fish] = await Promise.all([
-          api.fishHistory(fishId, 60),
-          api.fishOne(fishId),
-        ]);
+        const hist = await api.fishHistory(fishId, 60);
         if (cancelled) return;
         const series = [...hist.history]
           .reverse()
