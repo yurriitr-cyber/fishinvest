@@ -7,6 +7,8 @@ import http from 'node:http';
 import https from 'node:https';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join, extname, normalize, sep } from 'node:path';
+import { pipeline } from 'node:stream';
+import { createGzip } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { URL } from 'node:url';
 
@@ -35,7 +37,9 @@ const MIME = {
   '.map': 'application/json',
 };
 
-function sendFile(res, filePath) {
+const COMPRESS = new Set(['.html', '.js', '.css', '.json', '.svg', '.map']);
+
+function sendFile(req, res, filePath) {
   const ext = extname(filePath).toLowerCase();
   const rel = filePath.split(`${sep}dist${sep}`).pop() || filePath;
   // Banners/OG/art get updated in place — don't pin them immutable for a year
@@ -43,7 +47,7 @@ function sendFile(res, filePath) {
   const softCache =
     /(^|[/\\])(banners|og|fish|cases)([/\\]|$)/i.test(rel) ||
     /[/\\](banner-|invite\.)/i.test(rel);
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': MIME[ext] || 'application/octet-stream',
     'Cache-Control':
       ext === '.html'
@@ -51,8 +55,18 @@ function sendFile(res, filePath) {
         : softCache
           ? 'public, max-age=300, must-revalidate'
           : 'public, max-age=31536000, immutable',
-  });
-  createReadStream(filePath).pipe(res);
+  };
+  const stream = createReadStream(filePath);
+  const accept = String(req.headers['accept-encoding'] || '');
+  if (COMPRESS.has(ext) && accept.includes('gzip')) {
+    headers['Content-Encoding'] = 'gzip';
+    headers.Vary = 'Accept-Encoding';
+    res.writeHead(200, headers);
+    pipeline(stream, createGzip({ level: 5 }), res, () => undefined);
+    return;
+  }
+  res.writeHead(200, headers);
+  stream.pipe(res);
 }
 
 function resolveUnderDist(urlPath) {
@@ -85,14 +99,14 @@ function serveStatic(req, res) {
   }
 
   if (existsSync(candidate) && statSync(candidate).isFile()) {
-    sendFile(res, candidate);
+    sendFile(req, res, candidate);
     return;
   }
 
   // Admin SPA fallback
   if (urlPath === '/admin/' || urlPath.startsWith('/admin/')) {
     if (existsSync(adminIndex)) {
-      sendFile(res, adminIndex);
+      sendFile(req, res, adminIndex);
       return;
     }
     res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -103,7 +117,7 @@ function serveStatic(req, res) {
   // Mini App SPA fallback
   const index = join(distDir, 'index.html');
   if (existsSync(index)) {
-    sendFile(res, index);
+    sendFile(req, res, index);
     return;
   }
   res.writeHead(404).end('Not found');

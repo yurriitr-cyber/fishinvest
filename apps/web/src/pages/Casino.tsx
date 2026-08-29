@@ -22,6 +22,7 @@ import {
   translateError,
 } from '../lib/labels';
 import { hapticImpact, hapticNotify } from '../lib/telegram';
+import { isLowPower, useVisibleInterval } from '../lib/perf';
 
 const CASE_ART: Record<string, string> = {
   DAILY: '/cases/DAILY.jpg?v=2',
@@ -80,7 +81,13 @@ function ReelCell({ item, won = false }: { item: CaseLootItem; won?: boolean }) 
   return (
     <div className={`reel-cell ${rarityClass(item.rarity)} ${won ? 'won' : ''}`}>
       <div className="reel-cell-art">
-        <img src={fishImage(item.symbol, item.imageUrl)} alt="" />
+        <img
+          src={fishImage(item.symbol, item.imageUrl)}
+          alt=""
+          width={96}
+          height={96}
+          decoding="async"
+        />
       </div>
       <div className="reel-cell-sym">{caseFishName(item.symbol, item.name)}</div>
       <div className="reel-cell-price">{formatCredits(item.marketPrice)}</div>
@@ -103,7 +110,7 @@ export function Casino({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showTable, setShowTable] = useState(false);
-  const [fastMode, setFastMode] = useState(false);
+  const [fastMode, setFastMode] = useState(() => isLowPower());
 
   const [reel, setReel] = useState<CaseLootItem[] | null>(null);
   const [offset, setOffset] = useState(0);
@@ -163,14 +170,13 @@ export function Casino({
     );
   }, [load]);
 
-  // Ticket prices track live fish prices, so keep them fresh while idle.
-  useEffect(() => {
-    if (busy) return;
-    const t = setInterval(() => {
+  useVisibleInterval(
+    () => {
       api.casinoCases().then(setCases).catch(() => undefined);
-    }, 15000);
-    return () => clearInterval(t);
-  }, [busy]);
+    },
+    20_000,
+    !busy,
+  );
 
   const bestDrop = useMemo(() => {
     if (!selected) return null;
@@ -435,7 +441,7 @@ export function Casino({
                   className="reel-track idle"
                   style={{ '--drift': `${selected.loot.length * STRIDE}px` } as CSSProperties}
                 >
-                  {[0, 1, 2].map((copy) =>
+                  {(isLowPower() ? [0] : [0, 1]).map((copy) =>
                     selected.loot.map((item) => (
                       <ReelCell key={`${copy}-${item.fishId}`} item={item} />
                     )),

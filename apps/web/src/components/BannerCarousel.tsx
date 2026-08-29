@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useVisibleInterval } from '../lib/perf';
 
 const BANNER_VER = '20260829a';
 
@@ -18,13 +19,9 @@ export function BannerCarousel() {
   const [index, setIndex] = useState(0);
   const [snap, setSnap] = useState(false);
 
-  useEffect(() => {
-    if (BANNERS.length <= 1) return;
-    const id = setInterval(() => {
-      setIndex((i) => (i > LAST_REAL ? i : i + 1));
-    }, ROTATE_MS);
-    return () => clearInterval(id);
-  }, []);
+  useVisibleInterval(() => {
+    setIndex((i) => (i > LAST_REAL ? i : i + 1));
+  }, ROTATE_MS, BANNERS.length > 1);
 
   function loopToStart() {
     if (index !== BANNERS.length) return;
@@ -57,8 +54,12 @@ export function BannerCarousel() {
               <img
                 src={src}
                 alt=""
+                width={1672}
+                height={941}
                 draggable={false}
                 loading={i === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+                fetchPriority={i === 0 ? 'high' : 'low'}
               />
             </div>
           ))}

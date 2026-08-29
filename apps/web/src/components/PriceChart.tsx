@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { formatStars, pnlClass } from '../lib/format';
+import { useVisibleInterval } from '../lib/perf';
 
 type Point = { t: number; p: number };
 
@@ -20,7 +21,7 @@ export function PriceChart({
 
     async function pull() {
       try {
-        const hist = await api.fishHistory(fishId, 60);
+        const hist = await api.fishHistory(fishId, 48);
         if (cancelled) return;
         const series = [...hist.history]
           .reverse()
@@ -28,19 +29,32 @@ export function PriceChart({
             t: new Date(h.createdAt).getTime(),
             p: Number(h.price),
           }));
-        setPoints(series.slice(-80));
+        setPoints(series.slice(-48));
       } catch {
         /* keep last series */
       }
     }
 
     pull();
-    const id = setInterval(pull, 2500);
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
   }, [fishId]);
+
+  useVisibleInterval(() => {
+    api
+      .fishHistory(fishId, 48)
+      .then((hist) => {
+        const series = [...hist.history]
+          .reverse()
+          .map((h) => ({
+            t: new Date(h.createdAt).getTime(),
+            p: Number(h.price),
+          }));
+        setPoints(series.slice(-48));
+      })
+      .catch(() => undefined);
+  }, 5000);
 
   useEffect(() => {
     if (!Number.isFinite(price)) return;
@@ -116,13 +130,6 @@ export function PriceChart({
             <stop offset="60%" stopColor={stroke} stopOpacity="0.08" />
             <stop offset="100%" stopColor={stroke} stopOpacity="0" />
           </linearGradient>
-          <filter id="chartGlow" x="-10%" y="-30%" width="120%" height="180%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
         </defs>
         {area && <path d={area} fill="url(#chartFill)" />}
         {path && (
@@ -133,7 +140,6 @@ export function PriceChart({
             strokeWidth="1.8"
             strokeLinejoin="round"
             strokeLinecap="round"
-            filter="url(#chartGlow)"
             vectorEffect="non-scaling-stroke"
           />
         )}

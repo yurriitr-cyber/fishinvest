@@ -35,6 +35,16 @@ function inviteOgPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), inviteOgPlugin()],
+  build: {
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+        },
+      },
+    },
+  },
   server: {
     port: 5180,
     host: true,

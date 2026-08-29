@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { api, type Me } from './lib/api';
 import { translateError } from './lib/labels';
 import { BottomNav, type Tab } from './components/BottomNav';
@@ -6,9 +6,17 @@ import { Welcome } from './pages/Welcome';
 import { Market } from './pages/Market';
 import { Trade } from './pages/Trade';
 import { PortfolioPage } from './pages/Portfolio';
-import { Deposit } from './pages/Deposit';
-import { Casino } from './pages/Casino';
-import { Referrals } from './pages/Referrals';
+import { isLowPower } from './lib/perf';
+
+const Deposit = lazy(() =>
+  import('./pages/Deposit').then((m) => ({ default: m.Deposit })),
+);
+const Casino = lazy(() =>
+  import('./pages/Casino').then((m) => ({ default: m.Casino })),
+);
+const Referrals = lazy(() =>
+  import('./pages/Referrals').then((m) => ({ default: m.Referrals })),
+);
 
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -113,7 +121,7 @@ export default function App() {
         body = (
           <Market
             me={me}
-            onSelectFish={(id) => setSelectedFishId(id)}
+            onSelectFish={setSelectedFishId}
           />
         );
         break;
@@ -160,13 +168,27 @@ export default function App() {
   return (
     <>
       <div className="ocean" aria-hidden>
-        <span className="ocean-rays" />
-        <span className="ocean-caustics" />
-        <span className="ocean-floor" />
-        <span className="ocean-grain" />
+        {isLowPower() ? (
+          <span className="ocean-floor" />
+        ) : (
+          <>
+            <span className="ocean-rays" />
+            <span className="ocean-caustics" />
+            <span className="ocean-floor" />
+          </>
+        )}
       </div>
       <div className="app-shell">
-        {body}
+        <Suspense
+          fallback={
+            <div className="state-box">
+              Загрузка…
+              <div className="loading-bar" />
+            </div>
+          }
+        >
+          {body}
+        </Suspense>
         {!showWelcome && !loading && me && !error && (
           <BottomNav
             tab={tab}

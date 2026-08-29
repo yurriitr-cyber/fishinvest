@@ -26,10 +26,8 @@ export function Welcome({ me, onEnter }: { me: Me; onEnter: () => void }) {
       }
     }
     load();
-    const id = setInterval(load, 4000);
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
   }, []);
 
@@ -55,7 +53,13 @@ export function Welcome({ me, onEnter }: { me: Me; onEnter: () => void }) {
           <div className="welcome-preview-row">
             {cards.map((card, i) => (
               <div className="welcome-card" key={card.symbol} style={{ animationDelay: `${-i * 1.4}s` }}>
-                <img src={fishImage(card.symbol)} alt="" />
+                <img
+                  src={fishImage(card.symbol)}
+                  alt=""
+                  width={72}
+                  height={72}
+                  decoding="async"
+                />
                 <div className="welcome-card-meta">
                   <div className="name">{card.name}</div>
                   <div className="price">

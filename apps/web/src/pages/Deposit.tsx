@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useVisibleInterval } from '../lib/perf';
 import {
   api,
   type DepositMethod,
@@ -143,14 +144,32 @@ export function Deposit({
     }
 
     const debounce = setTimeout(pull, 220);
-    // Keep the displayed TON rate live while this tab is open
-    const interval = setInterval(pull, 15_000);
     return () => {
       cancelled = true;
       clearTimeout(debounce);
-      clearInterval(interval);
     };
   }, [tonSelected, tonMethod?.enabled, channel]);
+
+  useVisibleInterval(
+    () => {
+      if (channel !== 'ton' || !tonSelected || !tonMethod?.enabled) return;
+      api
+        .quoteTon(tonSelected)
+        .then((q) => {
+          setTonQuote(q);
+          setError(null);
+        })
+        .catch((e) => {
+          setError(
+            translateError(
+              e instanceof Error ? e.message : 'Quote failed',
+            ),
+          );
+        });
+    },
+    20_000,
+    channel === 'ton' && !!tonSelected && !!tonMethod?.enabled,
+  );
 
   async function watchTonDeposit(depositId: string, token: number) {
     setTonPhase('awaiting');

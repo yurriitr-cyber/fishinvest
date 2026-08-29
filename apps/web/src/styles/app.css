@@ -66,7 +66,7 @@ body {
     radial-gradient(90% 55% at 8% 8%, rgba(26, 143, 181, 0.24), transparent 62%),
     radial-gradient(80% 60% at 100% 30%, rgba(16, 78, 122, 0.32), transparent 60%),
     linear-gradient(180deg, #06283d 0%, var(--deep-2) 34%, var(--deep) 62%, var(--abyss) 100%);
-  background-attachment: fixed;
+  background-attachment: scroll;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
@@ -109,7 +109,6 @@ button {
     rgba(180, 240, 255, 0.055) 42px 66px,
     transparent 66px 120px
   );
-  filter: blur(6px);
   transform-origin: top center;
   animation: sway 16s ease-in-out infinite alternate;
 }
@@ -125,7 +124,6 @@ button {
   background-size: 46% 34%, 34% 26%, 60% 40%;
   background-position: 8% 12%, 78% 32%, 40% 78%;
   background-repeat: no-repeat;
-  filter: blur(22px);
   animation: drift 22s ease-in-out infinite alternate;
 }
 
@@ -816,6 +814,14 @@ button {
   text-align: left;
   width: 100%;
   border-radius: var(--radius);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 88px;
+  contain: layout style;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background:
+    linear-gradient(158deg, rgba(140, 205, 235, 0.14) 0%, transparent 46%),
+    linear-gradient(0deg, rgba(6, 26, 43, 0.78), rgba(2, 14, 24, 0.86));
   transition:
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
     border-color 180ms ease,
@@ -2478,4 +2484,50 @@ button {
     animation: none;
     transition: none;
   }
+}
+
+html.low-power {
+  --glass-blur: none;
+  --glass-blur-soft: none;
+}
+
+html.low-power .ocean-rays,
+html.low-power .ocean-caustics,
+html.low-power .ocean-grain {
+  display: none;
+}
+
+html.low-power .welcome-card,
+html.low-power .reel-track.idle,
+html.low-power .win-glow,
+html.low-power .live-dot,
+html.low-power .case-shine {
+  animation: none !important;
+}
+
+html.low-power .balance-pill::after,
+html.low-power .ticker-card::after,
+html.low-power .row::after,
+html.low-power .trade-panel::after,
+html.low-power .status-card::after,
+html.low-power .chart-card::after,
+html.low-power .deposit-method::after,
+html.low-power .bonus-chip::after {
+  display: none;
+}
+
+html.low-power .balance-pill,
+html.low-power .ticker-card,
+html.low-power .trade-panel,
+html.low-power .status-card,
+html.low-power .summary-item,
+html.low-power .chart-card,
+html.low-power .deposit-method,
+html.low-power .bonus-chip,
+html.low-power .toast,
+html.low-power .media-slot,
+html.low-power .nav,
+html.low-power .chip {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }

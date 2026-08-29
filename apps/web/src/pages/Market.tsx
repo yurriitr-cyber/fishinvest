@@ -8,7 +8,8 @@ import {
   pnlClass,
 } from '../lib/format';
 import { fishName, translateError } from '../lib/labels';
-import { useEffect, useState } from 'react';
+import { useVisibleInterval } from '../lib/perf';
+import { memo, useEffect, useMemo, useState } from 'react';
 
 export function Market({
   me,
@@ -35,18 +36,24 @@ export function Market({
       }
     }
     load();
-    const id = setInterval(load, 3000);
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
   }, []);
 
-  const list = [...fish].sort((a, b) => {
-    const ao = a.sortOrder ?? Number(a.currentPrice);
-    const bo = b.sortOrder ?? Number(b.currentPrice);
-    return ao - bo;
-  });
+  useVisibleInterval(() => {
+    api.fish().then(setFish).catch(() => undefined);
+  }, 6000);
+
+  const list = useMemo(
+    () =>
+      [...fish].sort((a, b) => {
+        const ao = a.sortOrder ?? Number(a.currentPrice);
+        const bo = b.sortOrder ?? Number(b.currentPrice);
+        return ao - bo;
+      }),
+    [fish],
+  );
 
   return (
     <div className="screen">
@@ -92,40 +99,63 @@ export function Market({
       )}
 
       <div className="list">
-        {list.map((f) => {
-          const left = f.availableSupply ?? 0;
-          const total = f.totalSupply || 1;
-          const pct = Math.max(0, Math.min(100, (left / total) * 100));
-          return (
-            <button
-              key={f.id}
-              className="row"
-              type="button"
-              onClick={() => onSelectFish(f.id)}
-            >
-              <span className="glyph">
-                <img src={fishImage(f.symbol, f.imageUrl)} alt="" />
-              </span>
-              <div className="row-main">
-                <div className="name">{fishName(f.symbol, f.name)}</div>
-                <div className="meta">
-                  {formatSupply(left)} ост.
-                  {f.isFrozen ? ' · фриз' : ''}
-                </div>
-                <div className="supply-bar" aria-hidden>
-                  <span style={{ width: `${pct}%` }} />
-                </div>
-              </div>
-              <div className="row-side">
-                <div className="price">{formatStars(f.currentPrice, 2)}</div>
-                <div className={`chg ${pnlClass(f.dailyChangePercent)}`}>
-                  {formatPct(f.dailyChangePercent)}
-                </div>
-              </div>
-            </button>
-          );
-        })}
+        {list.map((f, i) => (
+          <MarketRow
+            key={f.id}
+            fish={f}
+            eager={i < 6}
+            onSelect={onSelectFish}
+          />
+        ))}
       </div>
     </div>
   );
 }
+
+const MarketRow = memo(function MarketRow({
+  fish: f,
+  eager,
+  onSelect,
+}: {
+  fish: Fish;
+  eager: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const left = f.availableSupply ?? 0;
+  const total = f.totalSupply || 1;
+  const pct = Math.max(0, Math.min(100, (left / total) * 100));
+  return (
+    <button
+      className="row"
+      type="button"
+      onClick={() => onSelect(f.id)}
+    >
+      <span className="glyph">
+        <img
+          src={fishImage(f.symbol, f.imageUrl)}
+          alt=""
+          width={96}
+          height={96}
+          loading={eager ? 'eager' : 'lazy'}
+          decoding="async"
+        />
+      </span>
+      <div className="row-main">
+        <div className="name">{fishName(f.symbol, f.name)}</div>
+        <div className="meta">
+          {formatSupply(left)} ост.
+          {f.isFrozen ? ' · фриз' : ''}
+        </div>
+        <div className="supply-bar" aria-hidden>
+          <span style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+      <div className="row-side">
+        <div className="price">{formatStars(f.currentPrice, 2)}</div>
+        <div className={`chg ${pnlClass(f.dailyChangePercent)}`}>
+          {formatPct(f.dailyChangePercent)}
+        </div>
+      </div>
+    </button>
+  );
+});

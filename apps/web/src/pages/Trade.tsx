@@ -11,6 +11,7 @@ import {
 import { fishLore } from '../lib/fishLore';
 import { fishName, rarityLabel, translateError } from '../lib/labels';
 import { hapticImpact, hapticNotify } from '../lib/telegram';
+import { useVisibleInterval } from '../lib/perf';
 
 function formatQty(value: string | number) {
   const n = typeof value === 'string' ? Number(value) : value;
@@ -93,12 +94,22 @@ export function Trade({
       }
     }
     load();
-    const id = setInterval(load, 3000);
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
   }, [fishId]);
+
+  useVisibleInterval(() => {
+    Promise.all([api.fishOne(fishId), api.portfolio()])
+      .then(([data, portfolio]) => {
+        setFish(data);
+        const position = portfolio.positions.find(
+          (p) => p.fishId === fishId && !p.joint,
+        );
+        setOwnedQty(Math.floor(Number(position?.quantity ?? 0)) || 0);
+      })
+      .catch(() => undefined);
+  }, 5000);
 
   const quantity = Math.floor(Number(qty)) || 0;
   const total = useMemo(() => {
@@ -223,7 +234,13 @@ export function Trade({
           <div className="topbar">
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <span className="glyph">
-                <img src={fishImage(fish.symbol, fish.imageUrl)} alt="" />
+                <img
+                  src={fishImage(fish.symbol, fish.imageUrl)}
+                  alt=""
+                  width={96}
+                  height={96}
+                  decoding="async"
+                />
               </span>
               <div>
                 <div className="eyebrow">{rarityLabel(fish.rarity)}</div>
