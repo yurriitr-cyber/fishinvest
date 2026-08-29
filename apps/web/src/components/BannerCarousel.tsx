@@ -10,56 +10,59 @@ const BANNERS = [
   `/banners/banner-5.jpg?v=${BANNER_VER}`,
 ] as const;
 
+const SLIDES = [...BANNERS, BANNERS[0]];
+const LAST_REAL = BANNERS.length - 1;
 const ROTATE_MS = 4500;
 
 export function BannerCarousel() {
   const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
+  const [snap, setSnap] = useState(false);
 
   useEffect(() => {
-    if (paused || BANNERS.length <= 1) return;
+    if (BANNERS.length <= 1) return;
     const id = setInterval(() => {
-      setIndex((i) => (i + 1) % BANNERS.length);
+      setIndex((i) => (i > LAST_REAL ? i : i + 1));
     }, ROTATE_MS);
     return () => clearInterval(id);
-  }, [paused]);
+  }, []);
+
+  function loopToStart() {
+    if (index !== BANNERS.length) return;
+    setSnap(true);
+    setIndex(0);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setSnap(false));
+    });
+  }
+
+  useEffect(() => {
+    if (index !== BANNERS.length) return;
+    const id = window.setTimeout(loopToStart, 540);
+    return () => window.clearTimeout(id);
+  }, [index]);
 
   return (
     <div className="banner-wrap">
-      <div
-        className="banner-carousel"
-        onPointerEnter={() => setPaused(true)}
-        onPointerLeave={() => setPaused(false)}
-        onFocus={() => setPaused(true)}
-        onBlur={() => setPaused(false)}
-      >
-      <div
-        className="banner-track"
-        style={{ transform: `translateX(-${index * 100}%)` }}
-      >
-        {BANNERS.map((src, i) => (
-          <div className="banner-slide" key={src}>
-            <img
-              src={src}
-              alt=""
-              draggable={false}
-              loading={i === 0 ? 'eager' : 'lazy'}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="banner-dots" role="tablist" aria-label="Баннеры">
-        {BANNERS.map((src, i) => (
-          <button
-            key={src}
-            type="button"
-            role="tab"
-            aria-selected={i === index}
-            className={`banner-dot${i === index ? ' active' : ''}`}
-            onClick={() => setIndex(i)}
-          />
-        ))}
-      </div>
+      <div className="banner-carousel" aria-hidden>
+        <div
+          className={`banner-track${snap ? ' snap' : ''}`}
+          style={{ transform: `translateX(-${index * 100}%)` }}
+          onTransitionEnd={(e) => {
+            if (e.target !== e.currentTarget) return;
+            loopToStart();
+          }}
+        >
+          {SLIDES.map((src, i) => (
+            <div className="banner-slide" key={`${src}-${i}`}>
+              <img
+                src={src}
+                alt=""
+                draggable={false}
+                loading={i === 0 ? 'eager' : 'lazy'}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
