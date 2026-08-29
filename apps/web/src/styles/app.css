@@ -444,7 +444,6 @@ button {
   position: absolute;
   inset: 0 0 auto 0;
   height: 72dvh;
-  pointer-events: none;
 }
 
 .hero-copy {
@@ -469,6 +468,123 @@ button {
   display: flex;
   gap: 10px;
   margin-top: 24px;
+}
+
+.welcome-cta {
+  flex-direction: column;
+}
+
+.welcome-cta .btn {
+  width: 100%;
+}
+
+.welcome-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 12dvh 16px 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  -webkit-mask-image: linear-gradient(180deg, #000 48%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 48%, transparent 100%);
+}
+
+.welcome-preview-label {
+  margin-bottom: 16px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(2, 16, 28, 0.5);
+  border: 1px solid var(--edge);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.welcome-preview-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.welcome-card {
+  flex: 0 0 auto;
+  width: min(30vw, 118px);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(4, 22, 38, 0.72);
+  border: 1px solid var(--edge);
+  box-shadow: var(--shadow-soft);
+  animation: welcome-float 5.4s ease-in-out infinite;
+}
+
+.welcome-card:nth-child(2) {
+  width: min(34vw, 132px);
+  transform: translateY(-10px);
+}
+
+.welcome-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.welcome-card-meta {
+  padding: 8px 8px 10px;
+  text-align: left;
+}
+
+.welcome-card-meta .name {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.welcome-card-meta .price {
+  margin-top: 2px;
+  font-family: var(--font-mono, inherit);
+  font-size: 0.72rem;
+  color: var(--accent-2);
+}
+
+.welcome-card-meta .chg {
+  margin-top: 2px;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+@keyframes welcome-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.welcome-card:nth-child(2) {
+  animation-name: welcome-float-mid;
+}
+
+@keyframes welcome-float-mid {
+  0%,
+  100% {
+    transform: translateY(-10px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
 }
 
 /* ——————————————————————————————
@@ -2357,6 +2473,7 @@ button {
   .reel-cell.won,
   .win-glow,
   .case-open:disabled::after,
+  .welcome-card,
   .banner-track {
     animation: none;
     transition: none;
