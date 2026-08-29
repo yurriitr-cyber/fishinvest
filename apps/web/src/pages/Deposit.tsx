@@ -369,7 +369,15 @@ export function Deposit({
               aria-label="Сумма Stars"
             />
           </div>
-          <p className="amount-hint">1–50 000 Stars · 1 Star = 1 CR</p>
+          <p className="amount-hint">
+            1–50 000 Stars · 1 Star ={' '}
+            {quote
+              ? Number(quote.exchangeRate).toLocaleString('ru-RU', {
+                  maximumFractionDigits: 2,
+                })
+              : '3'}{' '}
+            CR
+          </p>
 
           {quote && selected && (
             <div className="summary">
@@ -430,7 +438,9 @@ export function Deposit({
               aria-label="Сумма TON"
             />
           </div>
-          <p className="amount-hint">0.05–500 TON · живой рыночный курс</p>
+          <p className="amount-hint">
+            0.05–500 TON · рыночный курс ×{tonQuote?.creditMultiplier ?? '3'}
+          </p>
 
           {tonQuote && tonSelected && (
             <div className="summary">
@@ -447,6 +457,10 @@ export function Deposit({
                     ? `${formatStars(creditsPerTon, 1)} CR`
                     : '—'}
                 </div>
+              </div>
+              <div className="summary-item">
+                <div className="label">Множитель</div>
+                <div className="value">×{tonQuote.creditMultiplier ?? '3'}</div>
               </div>
               <div className="summary-item">
                 <div className="label">Вы получите</div>

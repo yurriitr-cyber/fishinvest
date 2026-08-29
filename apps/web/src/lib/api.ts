@@ -204,6 +204,7 @@ export type StarsQuote = {
   grossGameCredits: string;
   feeAmount: string;
   gameCreditAmount: string;
+  creditMultiplier?: string;
 };
 
 export type DepositRecord = {
@@ -237,6 +238,7 @@ export type TonQuote = {
   rateFetchedAt?: string;
   depositAddress: string;
   exchangeRate: string;
+  creditMultiplier?: string;
 };
 
 type AuthState = {

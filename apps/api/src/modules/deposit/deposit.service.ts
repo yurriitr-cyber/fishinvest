@@ -23,6 +23,11 @@ import {
 
 const STAR_PACKS = [50, 100, 250, 500, 1000] as const;
 const TON_PACKS = [0.5, 1, 2, 5, 10] as const;
+const DEFAULT_STARS_TO_CREDIT = 3;
+
+function formatStarCreditRate(rate: Prisma.Decimal) {
+  return rate.eq(rate.trunc()) ? rate.toFixed(0) : rate.toFixed(2);
+}
 
 @Injectable()
 export class DepositService implements OnModuleInit, OnModuleDestroy {
@@ -91,14 +96,15 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
     });
     const starsFee = await this.getStarsFeePercent(new Prisma.Decimal(0));
 
+    const starRate = await this.getStarsToGameCreditRate();
     const labels: Record<string, { label: string; note: string }> = {
       TELEGRAM_STARS: {
         label: 'Telegram Stars',
-        note: '1 Telegram Star = 1 game credit',
+        note: `1 Telegram Star = ${formatStarCreditRate(starRate)} CR`,
       },
       TON: {
         label: 'TON',
-        note: 'Live TON→CR rate + 15% bonus · auto-confirm',
+        note: `Рыночный курс TON ×${formatStarCreditRate(starRate)} + ${this.tonBonusPercent().toFixed(0)}% бонус`,
       },
       TELEGRAM_GIFT: {
         label: 'Telegram Gift',
@@ -128,7 +134,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /** REAL Telegram Stars → GAME CREDITS (default 1:1). */
+  /** REAL Telegram Stars → GAME CREDITS (default 1★ = 3 CR). */
   async getStarsToGameCreditRate(): Promise<Prisma.Decimal> {
     const envRate = this.config.get<string>('STARS_TO_GAME_CREDIT_RATE');
     if (envRate) return new Prisma.Decimal(envRate);
@@ -148,7 +154,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       where: { fromAsset: 'STARS_EQUIVALENT', toAsset: 'GAME_CREDIT' },
       orderBy: { effectiveFrom: 'desc' },
     });
-    return legacy?.rate ?? new Prisma.Decimal(1);
+    return legacy?.rate ?? new Prisma.Decimal(DEFAULT_STARS_TO_CREDIT);
   }
 
   async getStarsFeePercent(providerFee: Prisma.Decimal): Promise<Prisma.Decimal> {
@@ -178,11 +184,12 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       assetAmount: assetAmount.toFixed(0),
       exchangeRate: rate.toFixed(8),
       rateSource: 'config_exchange_rate',
-      rateNote: '1 Telegram Star = 1 game credit (configurable).',
+      rateNote: `1 Telegram Star = ${formatStarCreditRate(rate)} CR`,
       feePercent: feePercent.toFixed(4),
       grossGameCredits: gross.toFixed(4),
       feeAmount: feeAmount.toFixed(4),
       gameCreditAmount: net.toFixed(4),
+      creditMultiplier: formatStarCreditRate(rate),
     };
   }
 
@@ -232,7 +239,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       description:
         Number(quote.feePercent) > 0
           ? `${quote.gameCreditAmount} игровых кредитов (после комиссии ${quote.feePercent}%)`
-          : `${quote.gameCreditAmount} игровых кредитов (1★ = 1 кредит)`,
+          : `${quote.gameCreditAmount} игровых кредитов (1★ = ${formatStarCreditRate(new Prisma.Decimal(quote.exchangeRate))} CR)`,
       payload: deposit.id,
       starAmount,
     });
@@ -374,7 +381,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
     return true;
   }
 
-  /** Approx Telegram Star USD for converting TON→credits (1★ = 1 credit). */
+  /** Approx Telegram Star USD for converting TON→credits. */
   private starUsdPrice(): Prisma.Decimal {
     const raw = this.config.get<string>('STAR_USD_PRICE') || '0.02';
     return new Prisma.Decimal(raw);
@@ -423,7 +430,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       exchangeRate: creditRate.div(starUsd).mul(tonUsd).toFixed(8), // base credits per 1 TON (before bonus)
       rateSource: ton.source,
       rateFetchedAt: ton.fetchedAt,
-      rateNote: `Live TON/USD ($${Number(ton.usdPrice).toFixed(4)}) → ★@$${starUsd} + ${bonusPercent}% TON bonus`,
+      rateNote: `TON/USD $${Number(ton.usdPrice).toFixed(4)} ×${formatStarCreditRate(creditRate)} CR + ${bonusPercent}% бонус`,
       feePercent: feePercent.toFixed(4),
       bonusPercent: bonusPercent.toFixed(4),
       bonusAmount: bonusAmount.toFixed(4),
@@ -431,6 +438,7 @@ export class DepositService implements OnModuleInit, OnModuleDestroy {
       feeAmount: feeAmount.toFixed(4),
       gameCreditAmount: net.toFixed(4),
       depositAddress: address,
+      creditMultiplier: formatStarCreditRate(creditRate),
     };
   }
 

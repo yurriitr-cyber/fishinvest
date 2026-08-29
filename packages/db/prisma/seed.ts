@@ -120,24 +120,24 @@ async function main() {
 
   await prisma.exchangeRate.upsert({
     where: { id: '00000000-0000-4000-8000-000000000001' },
-    update: { rate: 1 },
+    update: { rate: 3 },
     create: {
       id: '00000000-0000-4000-8000-000000000001',
       fromAsset: 'STARS_EQUIVALENT',
       toAsset: 'GAME_CREDIT',
-      rate: 1,
+      rate: 3,
       effectiveFrom: new Date(),
     },
   });
 
   await prisma.exchangeRate.upsert({
     where: { id: '00000000-0000-4000-8000-000000000002' },
-    update: { rate: 1 },
+    update: { rate: 3 },
     create: {
       id: '00000000-0000-4000-8000-000000000002',
       fromAsset: 'REAL_TELEGRAM_STAR',
       toAsset: 'GAME_CREDIT',
-      rate: 1,
+      rate: 3,
       effectiveFrom: new Date(),
     },
   });
