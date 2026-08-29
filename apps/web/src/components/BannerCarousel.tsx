@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const BANNER_VER = '20260828d';
+const BANNER_VER = '20260829a';
 
 const BANNERS = [
   `/banners/banner-1.jpg?v=${BANNER_VER}`,
