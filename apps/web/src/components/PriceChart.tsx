@@ -31,7 +31,6 @@ export function PriceChart({
             t: new Date(h.createdAt).getTime(),
             p: Number(h.price),
           }));
-        series.push({ t: Date.now(), p: Number(fish.currentPrice) });
         setPoints(series.slice(-80));
       } catch {
         /* keep last series */
@@ -64,9 +63,17 @@ export function PriceChart({
       return { path: '', area: '', min: 0, max: 0, change: 0 };
     }
     const vals = points.map((p) => p.p);
-    const lo = Math.min(...vals);
-    const hi = Math.max(...vals);
-    const pad = (hi - lo) * 0.12 || lo * 0.01 || 0.01;
+    let lo = Math.min(...vals);
+    let hi = Math.max(...vals);
+    const last = vals[vals.length - 1];
+    // Keep at least ~1.5% of price in view so 0.0001 noise doesn't fill the card.
+    const minSpan = Math.max(Math.abs(last) * 0.015, 0.0004);
+    if (hi - lo < minSpan) {
+      const mid = (hi + lo) / 2;
+      lo = mid - minSpan / 2;
+      hi = mid + minSpan / 2;
+    }
+    const pad = (hi - lo) * 0.12 || 0.01;
     const yMin = lo - pad;
     const yMax = hi + pad;
     const w = 320;
@@ -79,7 +86,13 @@ export function PriceChart({
     const line = `M ${coords.join(' L ')}`;
     const areaPath = `${line} L ${w},${h} L 0,${h} Z`;
     const ch = ((vals[vals.length - 1] - vals[0]) / vals[0]) * 100;
-    return { path: line, area: areaPath, min: lo, max: hi, change: ch };
+    return {
+      path: line,
+      area: areaPath,
+      min: Math.min(...vals),
+      max: Math.max(...vals),
+      change: ch,
+    };
   }, [points]);
 
   const up = change >= 0;

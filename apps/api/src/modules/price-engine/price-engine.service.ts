@@ -22,9 +22,10 @@ function parseIntervalMs(value: string | undefined): number {
   }
 }
 
+const DAY_BAND = 0.2;
+
 /**
- * Per-tick absolute step sized so a random walk drifts ~1–2%/hour on average.
- * Seed vols ~0.02–0.42: cheap/common fish move more, mythics a bit less.
+ * Per-tick step: ~0.7–1.5%/hour RMS so a day usually stays well inside ±20%.
  */
 function tickStep(
   price: number,
@@ -33,19 +34,37 @@ function tickStep(
 ): number {
   const vol = Math.max(0.01, Math.min(1, volatility));
   const ticksPerHour = Math.max(60, 3_600_000 / Math.max(2000, intervalMs));
-  // Target RMS move over an hour (fraction of price), scaled by volatility.
-  const hourTarget = 0.01 + vol * 0.03; // ~1.0% … ~2.3%
+  const hourTarget = 0.007 + vol * 0.016;
   const stepPct = hourTarget / Math.sqrt(ticksPerHour);
-  const jitter = 0.65 + Math.random() * 0.7; // 0.65×–1.35×
+  const jitter = 0.7 + Math.random() * 0.5;
   const abs = price * stepPct * jitter;
-  // Always at least one 4-decimal ULP so cheap fish don't freeze at 0.0000.
   const floor = price < 1 ? 0.0001 : price < 100 ? 0.001 : 0.01;
   return Math.max(floor, abs);
 }
 
-function smoothstep(t: number): number {
-  const x = Math.min(1, Math.max(0, t));
-  return x * x * (3 - 2 * x);
+function hashUnit(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+
+/** Per-fish 3h lean in [-1, 1] so names don't all move the same way. */
+function fishMood(fishId: string, nowMs: number): number {
+  const slot = Math.floor(nowMs / (3 * 3_600_000));
+  return hashUnit(`${fishId}:${slot}`) * 2 - 1;
+}
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+/** Soft 24h band: never go further outside ±20%, but don't snap back. */
+function applyDayBand(next: number, current: number, lo: number, hi: number) {
+  if (next < lo) return Math.max(next, Math.min(current, lo));
+  if (next > hi) return Math.min(next, Math.max(current, hi));
+  return next;
 }
 
 @Injectable()
@@ -136,94 +155,96 @@ export class PriceEngineService implements OnModuleInit, OnModuleDestroy {
       fish.rampStartAt != null &&
       fish.rampEndAt != null;
 
-    let newPrice = current;
+    const step = tickStep(current, vol, this.intervalMs);
+    const mood = fishMood(fish.id, now.getTime());
+    const pull = (previous - current) * 0.03;
+    const legacyDrift = current * trend * 0.0015;
+    const noise = (Math.random() * 2 - 1) * step;
+    const moodDrift = mood * step * 0.32;
+    let delta =
+      pull + legacyDrift + noise + moodDrift + momentum * current * 0.05;
+
     let clearRamp = false;
     let source: 'AUTOMATIC' | 'EVENT' | 'ADMIN' = eventMultiplier
       ? 'EVENT'
       : 'AUTOMATIC';
+    let rampTo: number | null = null;
 
     if (hasRamp) {
-      const from = Number(fish.rampFromPrice);
       const to = Number(fish.rampToPrice);
-      const start = fish.rampStartAt!.getTime();
-      const end = fish.rampEndAt!.getTime();
-      const span = Math.max(1, end - start);
-      const rawT = (now.getTime() - start) / span;
-      const t = smoothstep(Math.min(1, Math.max(0, rawT)));
+      rampTo = to;
+      const remainingMs = fish.rampEndAt!.getTime() - now.getTime();
+      const remainingTicks = Math.max(1, remainingMs / this.intervalMs);
+      const needed =
+        current > 0 && to > 0
+          ? current * (Math.pow(to / current, 1 / remainingTicks) - 1)
+          : (to - current) / remainingTicks;
+      delta += needed;
+    } else if (eventMultiplier) {
+      delta += current * (Number(eventMultiplier) - 1) * 0.008;
+    }
 
-      // Geometric interpolation so +10% lands exactly on target
-      const desired =
-        from > 0 && to > 0
-          ? from * Math.pow(to / from, t)
-          : from + (to - from) * t;
-
-      // Tiny noise so the chart still breathes (~0.05% of path)
-      const path = Math.abs(to - from) || current * 0.01;
-      const micro = (Math.random() * 2 - 1) * path * 0.0005;
-      newPrice = desired + micro;
-
-      if (rawT >= 1) {
-        newPrice = to;
+    const maxPct = Math.min(0.0028, Math.max(0.0012, vol * 0.01));
+    const maxAbs = Math.max(step * 1.5, current * maxPct);
+    delta = clamp(delta, -maxAbs, maxAbs);
+    if (hasRamp && rampTo != null) {
+      const remainingMs = fish.rampEndAt!.getTime() - now.getTime();
+      if (remainingMs <= this.intervalMs && Math.abs(rampTo - current) <= maxAbs * 1.6) {
+        delta = rampTo - current;
         clearRamp = true;
         source = 'ADMIN';
       }
+    }
+    let newPrice = current + delta;
+
+    const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const [dayPoint, hourPoint, firstPoint] = await Promise.all([
+      this.prisma.db.priceHistory.findFirst({
+        where: { fishId: fish.id, createdAt: { lte: dayAgo } },
+        orderBy: { createdAt: 'desc' },
+        select: { price: true },
+      }),
+      this.prisma.db.priceHistory.findFirst({
+        where: { fishId: fish.id, createdAt: { lte: hourAgo } },
+        orderBy: { createdAt: 'desc' },
+        select: { price: true },
+      }),
+      this.prisma.db.priceHistory.findFirst({
+        where: { fishId: fish.id },
+        orderBy: { createdAt: 'asc' },
+        select: { price: true },
+      }),
+    ]);
+    const dayBase = Number(dayPoint?.price ?? fish.currentPrice);
+    const dayLo = dayBase * (1 - DAY_BAND);
+    const dayHi = dayBase * (1 + DAY_BAND);
+    if (hasRamp && rampTo != null) {
+      const allowLo = Math.min(dayLo, rampTo, current);
+      const allowHi = Math.max(dayHi, rampTo, current);
+      newPrice = applyDayBand(newPrice, current, allowLo, allowHi);
     } else {
-      // Free market: random walk aimed at ~1–2% RMS move per hour.
-      const step = tickStep(current, vol, this.intervalMs);
-      // Mild mean-reversion to last price so we don't runaway, but weak enough
-      // to let the hour-scale walk accumulate.
-      const pull = (previous - current) * 0.04;
-      const legacyDrift = current * trend * 0.002;
-      const noise = (Math.random() * 2 - 1) * step;
-      let delta =
-        pull + legacyDrift + noise + momentum * current * 0.08;
-
-      if (eventMultiplier) {
-        delta += current * (Number(eventMultiplier) - 1) * 0.01;
-      }
-
-      // Cap a single tick ~0.35% so the tape doesn't jump like a slot machine.
-      const maxPct = Math.min(0.0035, Math.max(0.0015, vol * 0.012));
-      const maxAbs = Math.max(step * 1.4, current * maxPct);
-      delta = Math.max(-maxAbs, Math.min(maxAbs, delta));
-      newPrice = current + delta;
+      newPrice = applyDayBand(newPrice, current, dayLo, dayHi);
     }
 
-    newPrice = Math.max(Number(fish.minPrice), Math.min(Number(fish.maxPrice), newPrice));
+    newPrice = clamp(newPrice, Number(fish.minPrice), Number(fish.maxPrice));
     let rounded = Math.round(newPrice * 10000) / 10000;
-    // If the move rounded away, nudge one ULP in the intended direction.
     if (rounded === current && newPrice !== current) {
-      rounded = current + (newPrice > current ? 0.0001 : -0.0001);
-      rounded = Math.max(
-        Number(fish.minPrice),
-        Math.min(Number(fish.maxPrice), rounded),
-      );
+      const ulp = current < 1 ? 0.0001 : current < 100 ? 0.001 : 0.01;
+      const dir = newPrice > current ? 1 : -1;
+      const lastDir = current - previous;
+      // Don't flip 0.0170↔0.0171 every tick — that reads as a fake chart.
+      if (lastDir === 0 || lastDir * dir > 0) {
+        rounded = current + dir * ulp;
+        rounded = clamp(rounded, Number(fish.minPrice), Number(fish.maxPrice));
+      }
     }
     newPrice = rounded;
 
     const prevDec = fish.currentPrice;
     const price = new Prisma.Decimal(newPrice);
 
-    // Market % = change vs ~1h ago (not last tick), so the board isn't stuck at 0.
-    const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-    let base = (
-      await this.prisma.db.priceHistory.findFirst({
-        where: { fishId: fish.id, createdAt: { lte: hourAgo } },
-        orderBy: { createdAt: 'desc' },
-        select: { price: true },
-      })
-    )?.price;
-    if (!base) {
-      // First hour after deploy: measure from earliest tick we have.
-      base = (
-        await this.prisma.db.priceHistory.findFirst({
-          where: { fishId: fish.id },
-          orderBy: { createdAt: 'asc' },
-          select: { price: true },
-        })
-      )?.price;
-    }
-    if (!base) base = prevDec;
+    let base = hourPoint?.price ?? firstPoint?.price ?? prevDec;
     const changePercent = base.gt(0)
       ? price.sub(base).div(base).mul(100)
       : new Prisma.Decimal(0);
