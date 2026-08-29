@@ -22,7 +22,7 @@ import {
   translateError,
 } from '../lib/labels';
 import { hapticImpact, hapticNotify } from '../lib/telegram';
-import { isLowPower, useVisibleInterval } from '../lib/perf';
+import { useVisibleInterval } from '../lib/perf';
 
 const CASE_ART: Record<string, string> = {
   DAILY: '/cases/DAILY.jpg?v=2',
@@ -110,7 +110,7 @@ export function Casino({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showTable, setShowTable] = useState(false);
-  const [fastMode, setFastMode] = useState(() => isLowPower());
+  const [fastMode, setFastMode] = useState(false);
 
   const [reel, setReel] = useState<CaseLootItem[] | null>(null);
   const [offset, setOffset] = useState(0);
@@ -121,6 +121,8 @@ export function Casino({
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
+  const pendingSpin = useRef<CaseOpening | null>(null);
+  const [spinKey, setSpinKey] = useState(0);
 
   const selected = cases.find((c) => c.id === selectedId) || null;
   const balance = Number(me.balance);
@@ -204,6 +206,7 @@ export function Casino({
       rail.scrollBy({ left: delta, behavior: 'smooth' });
     }
     clearTimers();
+    pendingSpin.current = null;
     setSelectedId(id);
     setReveal(null);
     setReel(null);
@@ -309,18 +312,30 @@ export function Casino({
       };
 
     const cells = buildReel(selected.loot, winner);
+    // Mount a fresh track at offset 0 first. Starting the CSS transition in the
+    // same frame as that mount (or a single rAF) often skips the scroll in WebView.
+    pendingSpin.current = result;
+    setSpinKey((k) => k + 1);
     setReel(cells);
     setSliding(false);
     setOffset(0);
+  }
 
-    requestAnimationFrame(() => {
-      const width = viewportRef.current?.clientWidth ?? 320;
-      // Land the winning cell under the centre marker, with slight jitter
+  useEffect(() => {
+    if (!reel || !pendingSpin.current) return;
+    const result = pendingSpin.current;
+    let cancelled = false;
+
+    const kick = () => {
+      if (cancelled || pendingSpin.current !== result) return;
+      pendingSpin.current = null;
+      const width = viewportRef.current?.clientWidth || 320;
+      const track = viewportRef.current?.querySelector('.reel-track');
+      if (track instanceof HTMLElement) void track.offsetWidth;
       const jitter = (Math.random() - 0.5) * (CELL * 0.5);
       const target = WIN_INDEX * STRIDE + CELL / 2 - width / 2 + jitter;
       setSliding(true);
       setOffset(target);
-
       TICK_MS.forEach((at) => {
         timers.current.push(
           window.setTimeout(() => void hapticImpact('light'), at),
@@ -329,8 +344,16 @@ export function Casino({
       timers.current.push(
         window.setTimeout(() => finishReveal(result), SPIN_MS + 120),
       );
+    };
+
+    const outer = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(kick);
     });
-  }
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(outer);
+    };
+  }, [reel, spinKey]);
 
   return (
     <div className="screen">
@@ -422,6 +445,7 @@ export function Casino({
             <div className="reel-viewport" ref={viewportRef}>
               {reel ? (
                 <div
+                  key={spinKey}
                   className={`reel-track ${sliding ? 'sliding' : ''}`}
                   style={{
                     transform: `translate3d(${-offset}px, 0, 0)`,
@@ -441,7 +465,7 @@ export function Casino({
                   className="reel-track idle"
                   style={{ '--drift': `${selected.loot.length * STRIDE}px` } as CSSProperties}
                 >
-                  {(isLowPower() ? [0] : [0, 1]).map((copy) =>
+                  {[0, 1].map((copy) =>
                     selected.loot.map((item) => (
                       <ReelCell key={`${copy}-${item.fishId}`} item={item} />
                     )),

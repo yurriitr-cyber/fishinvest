@@ -2010,6 +2010,10 @@ button {
   transition-timing-function: cubic-bezier(0.08, 0.82, 0.1, 1);
 }
 
+.reel-track.sliding {
+  transition-property: transform;
+}
+
 /* Landing flash across the whole reel. */
 .reel.done::after {
   content: '';
@@ -2474,7 +2478,6 @@ button {
   .toast,
   .case-shine,
   .reel-track.idle,
-  .reel-track.sliding,
   .reel.done::after,
   .reel-cell.won,
   .win-glow,
