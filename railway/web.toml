@@ -1,6 +1,15 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.web"
+# Admin UI is copied into the web image. Without this, Railway skips web
+# when only apps/admin changes and /admin/ stays stale.
+watchPatterns = [
+  "apps/web/**",
+  "apps/admin/**",
+  "Dockerfile.web",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+]
 
 [deploy]
 healthcheckPath = "/"

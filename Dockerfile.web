@@ -26,7 +26,7 @@ RUN pnpm --filter @rare-fish/web build \
   && mkdir -p apps/web/dist/admin \
   && cp -R apps/admin/dist/. apps/web/dist/admin/ \
   && test -f apps/web/dist/admin/index.html \
-  && grep -q "broadcast" apps/web/dist/admin/assets/*.js \
+  && grep -q "activeDays30" apps/web/dist/admin/assets/*.js \
   && echo "Admin bundled OK" && ls -la apps/web/dist/admin | head
 
 FROM base AS runner
