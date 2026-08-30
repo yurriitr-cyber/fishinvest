@@ -60,10 +60,10 @@ export function Market({
       <div className="topbar">
         <div>
           <div className="eyebrow">
-            <span className="live-dot" /> Живой рынок
+            <span className="live-dot" /> Live market
           </div>
           <h1>Rare Fish</h1>
-          <p>Ограниченный тираж · игровые кредиты</p>
+          <p>@rarefishinvestment_bot</p>
         </div>
         <div className="balance-pill">
           <div className="label">Баланс</div>
