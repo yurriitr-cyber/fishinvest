@@ -117,6 +117,21 @@ export function Trade({
     return Number(fish.currentPrice) * quantity;
   }, [fish, quantity]);
 
+  const cash = Number(balance);
+  const unitPrice = fish ? Number(fish.currentPrice) : 0;
+  const maxBuy = useMemo(() => {
+    if (!fish || !(unitPrice > 0)) return 0;
+    const budget = jointMode ? cash * 2 : cash;
+    let n = Math.floor(budget / unitPrice);
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    n = Math.min(n, Math.max(0, fish.availableSupply));
+    const costOf = (count: number) =>
+      jointMode ? (count * unitPrice) / 2 : count * unitPrice;
+    while (n > 0 && costOf(n) > cash + 1e-8) n -= 1;
+    return n;
+  }, [fish, unitPrice, cash, jointMode]);
+  const allQty = side === 'buy' ? maxBuy : ownedQty;
+
   async function submit() {
     if (!fish || quantity <= 0) return;
     if (jointMode && side === 'buy') {
@@ -391,9 +406,7 @@ export function Trade({
                 ? ['1', '2', '5', '10', '20']
                 : ['1', '5', '10', '25', '100']
               )
-                .concat(
-                  !jointMode && hasOwned ? [String(ownedQty)] : [],
-                )
+                .concat(allQty > 0 ? [String(allQty)] : [])
                 .filter((n, i, arr) => arr.indexOf(n) === i)
                 .map((n) => (
                   <button
@@ -402,9 +415,7 @@ export function Trade({
                     type="button"
                     onClick={() => setQty(n)}
                   >
-                    {n === String(ownedQty) && hasOwned && !jointMode
-                      ? 'Всё'
-                      : n}
+                    {n === String(allQty) && allQty > 0 ? 'Всё' : n}
                   </button>
                 ))}
             </div>
